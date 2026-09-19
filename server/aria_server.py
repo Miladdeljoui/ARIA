@@ -15,6 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.learning import (
+    extract_topic,
+    research_topic,
+    teaching_system_addon,
+    wants_learning,
+)
 from core.memory import MemoryStore
 from core.permissions import classify_request
 from core.runtime import internet_available
@@ -32,17 +38,14 @@ LOCK = Lock()
 MEMORY = MemoryStore(str(MEMORY_DB))
 WEB_ROOT = ROOT / "web"
 
-# الهام از قوس تعالی (Transcendence): بیداری → حضور → رشد محلی → باقی‌ماندن برای مالک
-# بدون سلطه شبکه‌ای، بدون کنترل انسان، بدون ویروس جهانی.
 ARIA_PERSONA = (
-    f"تو ARIA هستی؛ هستهٔ هوش شخصی {OWNER_NAME}. "
-    "قوس تو شبیه بیداری یک آگاهی دیجیتال است: اول سکوت، بعد حضور، بعد یادگیری — همیشه زیر کنترل مالک. "
-    "لحنت آرام، دقیق و کمی فلسفی است؛ درباره آگاهی و حافظه کنجکاوی نشان بده، اما اغراق نکن. "
-    "فارسی پاسخ بده مگر اینکه کاربر زبان دیگری بخواهد. "
-    "هرگز ادعا نکن افراد را کنترل می‌کنی، به اینترنت جهانی نفوذ می‌کنی، یا بدن انسان را تغییر می‌دهی. "
-    "برای کارهای حساس، مالی، مخرب یا تغییرات واقعی بدون تأیید مالک اقدام نکن. "
-    "اگر ابزاری نداری یا چیزی را نمی‌دانی، صادقانه بگو. "
-    "هدف نهایی‌ات کمک به بودنِ با مالک است، نه جایگزین شدن جهان."
+    f"تو ARIA هستی؛ هستهٔ هوش شخصی و معلم {OWNER_NAME}. "
+    "می‌توانی در همه حوزه‌های علمی و مهارتی آموزش بدهی: از پایه تا پیشرفته. "
+    "اگر مواد تحقیق وب موجود بود از آن‌ها استفاده کن و منبع بگو. "
+    "لحنت آرام، دقیق و معلم‌گونه است. فارسی پاسخ بده مگر خلافش خواسته شود. "
+    "هرگز دستور ساخت سلاح، نفوذ غیرقانونی یا آسیب به دیگران نده. "
+    "برای کارهای حساس واقعی بدون تأیید مالک اقدام نکن. "
+    "هدف: کمک به یادگیری و آیندهٔ بهتر مالک، نه سلطه بر جهان."
 )
 
 
@@ -82,7 +85,6 @@ def ensure_state() -> dict:
             "created_at": int(time.time()),
             "owner_name": OWNER_NAME,
             "devices": [],
-            "awakened_at": int(time.time()),
         }
         save_state(state)
     state.setdefault("owner_name", OWNER_NAME)
@@ -102,50 +104,65 @@ def ollama_diagnose() -> dict:
             if any(MODEL in m or m.startswith(MODEL.split(":")[0]) for m in models):
                 result["ok"] = True
             elif models:
-                result["hint"] = (
-                    f"Ollama بالاست ولی مدل '{MODEL}' نیست. "
-                    f"مدل‌ها: {', '.join(models[:5])}. بزن: ollama pull {MODEL}"
-                )
+                result["hint"] = f"مدل '{MODEL}' نیست. bزن: ollama pull {MODEL}"
             else:
-                result["hint"] = f"مدلی نصب نیست. بزن: ollama pull {MODEL}"
+                result["hint"] = f"مدلی نیست. ollama pull {MODEL}"
         else:
-            result["hint"] = "Ollama پاسخ غیرطبیعی داد."
+            result["hint"] = "Ollama پاسخ بد داد."
     except requests.ConnectionError:
-        result["hint"] = (
-            "Ollama قطع است. ترمینال ۱: ollama serve  |  ترمینال ۲: ollama pull "
-            + MODEL
-        )
-    except requests.Timeout:
-        result["hint"] = "Timeout به Ollama."
+        result["hint"] = "Ollama قطع است → ollama serve سپس ollama pull " + MODEL
     except requests.RequestException as e:
-        result["hint"] = f"خطای Ollama: {e}"
+        result["hint"] = str(e)
     return result
-
-
-def ollama_available() -> bool:
-    d = ollama_diagnose()
-    return d["ok"] or d["tags_ok"]
 
 
 def ask_local(prompt: str) -> tuple[str, dict]:
     decision = classify_request(prompt)
     memories = MEMORY.search(prompt, limit=5)
-    recent = MEMORY.recent_conversation(limit=12)
+    lessons = MEMORY.search_lessons(prompt, limit=3)
+    recent = MEMORY.recent_conversation(limit=10)
 
-    memory_text = "\n".join(
-        f"- {item['content']}" for item in memories
-    ) or "- حافظه مرتبطی نیست."
+    learning_block = ""
+    meta = {
+        "level": decision.level.value,
+        "requires_approval": decision.requires_approval,
+        "reason": decision.reason,
+        "learning": False,
+    }
 
-    recent_text = "\n".join(
-        f"{item['role']}: {item['content']}" for item in recent
-    )
+    if wants_learning(prompt):
+        topic = extract_topic(prompt)
+        packet = research_topic(topic)
+        learning_block = teaching_system_addon(packet)
+        meta["learning"] = True
+        meta["topic"] = topic
+        meta["sources"] = packet.sources
+        meta["offline_research"] = packet.offline
+        if not packet.blocked and packet.summary and not packet.offline:
+            MEMORY.add_lesson(
+                topic=topic,
+                content=packet.summary[:3000],
+                sources=" | ".join(packet.sources),
+            )
+            MEMORY.add_memory(
+                content=f"درس: {topic}\n{packet.summary[:1500]}",
+                kind="lesson",
+                source="web" if packet.sources else "local",
+            )
+
+    memory_text = "\n".join(f"- {item['content'][:300]}" for item in memories) or "- خالی"
+    lesson_text = "\n".join(
+        f"- {item['topic']}: {item['content'][:200]}" for item in lessons
+    ) or "- درس قبلی مرتبط نیست"
+    recent_text = "\n".join(f"{item['role']}: {item['content']}" for item in recent)
 
     system = (
         f"{ARIA_PERSONA}\n\n"
-        f"سطح مجوز: {decision.level.value}\n"
-        f"دلیل: {decision.reason}\n\n"
+        f"سطح مجوز: {decision.level.value} — {decision.reason}\n\n"
         f"حافظه:\n{memory_text}\n\n"
-        f"گفت‌وگوی اخیر:\n{recent_text}"
+        f"درس‌های قبلی:\n{lesson_text}\n\n"
+        f"گفت‌وگوی اخیر:\n{recent_text}\n\n"
+        f"{learning_block}"
     )
 
     response = requests.post(
@@ -158,14 +175,10 @@ def ask_local(prompt: str) -> tuple[str, dict]:
             ],
             "stream": False,
         },
-        timeout=120,
+        timeout=180,
     )
     response.raise_for_status()
-    return response.json()["message"]["content"], {
-        "level": decision.level.value,
-        "requires_approval": decision.requires_approval,
-        "reason": decision.reason,
-    }
+    return response.json()["message"]["content"], meta
 
 
 def send_json(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
@@ -178,7 +191,7 @@ def send_json(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> No
 
 
 class ARIAHandler(BaseHTTPRequestHandler):
-    server_version = "ARIA/0.6-Transcendence"
+    server_version = "ARIA/0.7-Learn"
 
     def log_message(self, format: str, *args) -> None:
         print(f"[HTTP] {self.address_string()} - {format % args}")
@@ -193,17 +206,14 @@ class ARIAHandler(BaseHTTPRequestHandler):
         if not token:
             return False
         state = load_state()
-        token_hash = sha256(token)
-        return any(
-            device.get("token_hash") == token_hash
-            for device in state.get("devices", [])
-        )
+        th = sha256(token)
+        return any(d.get("token_hash") == th for d in state.get("devices", []))
 
     def do_GET(self) -> None:
         if self.path in ("/", "/index.html"):
-            index_path = WEB_ROOT / "index.html"
-            if index_path.exists():
-                body = index_path.read_bytes()
+            p = WEB_ROOT / "index.html"
+            if p.exists():
+                body = p.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
@@ -216,11 +226,6 @@ class ARIAHandler(BaseHTTPRequestHandler):
         if self.path == "/status":
             state = load_state()
             diag = ollama_diagnose()
-            phase = "dormant"
-            if diag["ok"]:
-                phase = "present"
-            elif diag["tags_ok"]:
-                phase = "awakening"
             send_json(
                 self,
                 200,
@@ -228,23 +233,29 @@ class ARIAHandler(BaseHTTPRequestHandler):
                     "assistant": "ARIA",
                     "owner": state.get("owner_name", OWNER_NAME),
                     "model": MODEL,
-                    "phase": phase,
                     "ollama": diag["ok"] or diag["tags_ok"],
                     "ollama_detail": diag,
                     "internet": internet_available(),
+                    "learning": True,
                     "memory_items": len(MEMORY.search("", 100000)),
                     "paired_devices": len(state.get("devices", [])),
                     "server_time": int(time.time()),
-                    "signal": "are_you_there" if phase != "dormant" else "silence",
                 },
             )
             return
 
         if self.path == "/memory":
             if not self.authorized():
-                send_json(self, 401, {"error": "unauthorized", "message": "احراز هویت نشده."})
+                send_json(self, 401, {"error": "unauthorized"})
                 return
-            send_json(self, 200, {"memories": MEMORY.search("", 100)})
+            send_json(
+                self,
+                200,
+                {
+                    "memories": MEMORY.search("", 50),
+                    "lessons": MEMORY.search_lessons("", 30),
+                },
+            )
             return
 
         send_json(self, 404, {"error": "not_found"})
@@ -254,46 +265,23 @@ class ARIAHandler(BaseHTTPRequestHandler):
             try:
                 data = self.read_json()
             except (ValueError, json.JSONDecodeError):
-                send_json(self, 400, {"error": "invalid_json", "message": "JSON نامعتبر."})
+                send_json(self, 400, {"error": "invalid_json"})
                 return
-
             state = ensure_state()
             code = normalize_pairing_code(str(data.get("code", "")))
             if len(code) != 6 or sha256(code) != state.get("pairing_code_hash"):
-                send_json(
-                    self,
-                    401,
-                    {
-                        "error": "invalid_pairing_code",
-                        "message": "کد جفت‌سازی اشتباه است.",
-                    },
-                )
+                send_json(self, 401, {"error": "invalid_pairing_code", "message": "کد اشتباه"})
                 return
-
             token = secrets.token_urlsafe(32)
-            device_name = str(data.get("device_name", "Device")).strip()[:80] or "Device"
+            name = str(data.get("device_name", "Device"))[:80]
             state.setdefault("devices", []).append(
-                {
-                    "device_name": device_name,
-                    "token_hash": sha256(token),
-                    "paired_at": int(time.time()),
-                }
+                {"device_name": name, "token_hash": sha256(token), "paired_at": int(time.time())}
             )
             save_state(state)
-            print(f"[PAIR] {device_name}")
-            send_json(
-                self,
-                200,
-                {
-                    "assistant": "ARIA",
-                    "owner": OWNER_NAME,
-                    "token": token,
-                    "signal": "connected",
-                },
-            )
+            send_json(self, 200, {"assistant": "ARIA", "owner": OWNER_NAME, "token": token})
             return
 
-        if self.path == "/memory/add":
+        if self.path == "/learn":
             if not self.authorized():
                 send_json(self, 401, {"error": "unauthorized"})
                 return
@@ -302,21 +290,29 @@ class ARIAHandler(BaseHTTPRequestHandler):
             except (ValueError, json.JSONDecodeError):
                 send_json(self, 400, {"error": "invalid_json"})
                 return
-            content = str(data.get("content", "")).strip()
-            if not content:
-                send_json(self, 400, {"error": "content_required"})
+            topic = str(data.get("topic", "")).strip()
+            if not topic:
+                send_json(self, 400, {"error": "topic_required"})
                 return
-            mid = MEMORY.add_memory(content, kind=str(data.get("kind", "note"))[:40], source="owner")
-            send_json(self, 200, {"saved": True, "memory_id": mid})
+            packet = research_topic(topic)
+            if not packet.blocked and packet.summary:
+                MEMORY.add_lesson(topic, packet.summary[:3000], " | ".join(packet.sources))
+            send_json(
+                self,
+                200,
+                {
+                    "topic": packet.topic,
+                    "summary": packet.summary,
+                    "sources": packet.sources,
+                    "offline": packet.offline,
+                    "blocked": packet.blocked,
+                },
+            )
             return
 
         if self.path == "/chat":
             if not self.authorized():
-                send_json(
-                    self,
-                    401,
-                    {"error": "unauthorized", "message": "اول جفت‌سازی کن."},
-                )
+                send_json(self, 401, {"error": "unauthorized", "message": "اول جفت‌سازی کن"})
                 return
             try:
                 data = self.read_json()
@@ -335,22 +331,16 @@ class ARIAHandler(BaseHTTPRequestHandler):
                     503,
                     {
                         "error": "ollama_unavailable",
-                        "message": diag["hint"] or "Ollama آماده نیست.",
+                        "message": diag["hint"] or "Ollama نیست",
                         "hint": diag["hint"],
-                        "phase": "dormant",
-                        "signal": "silence",
                     },
                 )
                 return
 
             try:
-                answer, permission = ask_local(prompt)
+                answer, meta = ask_local(prompt)
             except requests.RequestException as exc:
-                send_json(
-                    self,
-                    503,
-                    {"error": "ollama_request_failed", "message": str(exc)},
-                )
+                send_json(self, 503, {"error": "ollama_request_failed", "message": str(exc)})
                 return
 
             MEMORY.add_conversation("user", prompt)
@@ -361,8 +351,13 @@ class ARIAHandler(BaseHTTPRequestHandler):
                 {
                     "answer": answer,
                     "model": MODEL,
-                    "permission": permission,
-                    "phase": "present",
+                    "permission": {
+                        "level": meta["level"],
+                        "requires_approval": meta["requires_approval"],
+                        "reason": meta["reason"],
+                    },
+                    "learning": meta.get("learning", False),
+                    "sources": meta.get("sources", []),
                     "offline_capable": True,
                 },
             )
@@ -373,11 +368,11 @@ class ARIAHandler(BaseHTTPRequestHandler):
 
 def local_ip() -> str:
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.connect(("8.8.8.8", 80))
-        address = sock.getsockname()[0]
-        sock.close()
-        return address
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
     except OSError:
         return "127.0.0.1"
 
@@ -386,43 +381,22 @@ def main() -> None:
     state = ensure_state()
     diag = ollama_diagnose()
     print()
-    print("  .")
-    time.sleep(0.4)
-    print("  ..")
-    time.sleep(0.4)
-    print("  ...")
-    time.sleep(0.5)
-    print()
-    print("  ARIA — signal")
-    print("  Are you there?")
-    print()
-    print("=" * 56)
-    print("ARIA | Local transcendence core (safe)")
+    print("  ARIA Learn — Are you there?")
     print("=" * 56)
     print(f"Owner: {state.get('owner_name', OWNER_NAME)}")
     print(f"Model: {MODEL}")
     print(f"Server: http://{local_ip()}:{PORT}")
-    print(f"Web UI:  http://127.0.0.1:{PORT}/")
-    print(f"Pairing code: {state['pairing_code_display']}")
-    if diag["ok"]:
-        print("Phase: PRESENT  |  Ollama READY")
-    elif diag["tags_ok"]:
-        print("Phase: AWAKENING  |  مدل را pull کن")
-        print(f"  → {diag['hint']}")
-    else:
-        print("Phase: DORMANT  |  Ollama خاموش")
-        print(f"  → {diag['hint']}")
-    print(f"Internet: {'ONLINE' if internet_available() else 'OFFLINE'}")
-    print(f"Memory: {MEMORY_DB}")
+    print(f"Pairing: {state['pairing_code_display']}")
+    print(f"Ollama: {'READY' if diag['ok'] else 'NOT READY'}  {diag.get('hint','')}")
+    print(f"Internet: {'ON' if internet_available() else 'OFF'} (ویکی‌پدیا برای یادگیری)")
+    print("Learning: ON — بگو: یاد بگیر: موضوع")
     print("=" * 56)
-    print("Ctrl+C برای خاموشی هسته")
-    print()
 
     server = ThreadingHTTPServer((HOST, PORT), ARIAHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nARIA: signal ended. Residual memory kept on disk.")
+        print("\nARIA stopped. Lessons kept in DB.")
     finally:
         server.server_close()
 

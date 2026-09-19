@@ -39,6 +39,17 @@ class MemoryStore:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS lessons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    sources TEXT NOT NULL DEFAULT '',
+                    created_at INTEGER NOT NULL
+                )
+                """
+            )
             connection.commit()
 
     def add_memory(
@@ -57,6 +68,33 @@ class MemoryStore:
             )
             connection.commit()
             return int(cursor.lastrowid)
+
+    def add_lesson(self, topic: str, content: str, sources: str = "") -> int:
+        with self._lock, self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO lessons(topic, content, sources, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (topic, content, sources, int(time.time())),
+            )
+            connection.commit()
+            return int(cursor.lastrowid)
+
+    def search_lessons(self, query: str, limit: int = 5) -> list[dict]:
+        q = f"%{query.strip()}%"
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, topic, content, sources, created_at
+                FROM lessons
+                WHERE topic LIKE ? OR content LIKE ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (q, q, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def search(self, query: str, limit: int = 10) -> list[dict]:
         words = [word for word in query.strip().split() if word]
@@ -118,5 +156,6 @@ class MemoryStore:
         payload = {
             "memories": self.search("", 1000),
             "conversations": self.recent_conversation(1000),
+            "lessons": self.search_lessons("", 200),
         }
         return json.dumps(payload, ensure_ascii=False, indent=2)
