@@ -1,13 +1,25 @@
 package com.miladdeljoui.aria
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,43 +27,101 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.cos
+import kotlin.math.sin
 
-data class ChatItem(val owner: Boolean, val text: String)
+private data class ChatItem(val owner: Boolean, val text: String)
 
 class MainActivity : ComponentActivity() {
+    private val askPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            voiceStatus.value = "مجوز میکروفون داده نشد"
+        }
+    }
+
+    private val voiceStatus = mutableStateOf("آماده")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AriaApp()
-                }
+            AriaTheme {
+                AriaApp(
+                    voiceStatus = voiceStatus.value,
+                    requestMicPermission = {
+                        if (ContextCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            Unit
+                        } else {
+                            askPermission.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun AriaApp() {
+private fun AriaTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = androidx.compose.material3.darkColorScheme(
+            primary = AriaCyan,
+            secondary = AriaCyan,
+            background = AriaBackground,
+            surface = AriaPanel,
+            onBackground = AriaText,
+            onSurface = AriaText
+        ),
+        content = content
+    )
+}
+
+@Composable
+private fun AriaApp(
+    voiceStatus: String,
+    requestMicPermission: () -> Unit
+) {
     val context = LocalContext.current
     val prefs = remember {
         context.getSharedPreferences("aria", Context.MODE_PRIVATE)
@@ -76,16 +146,55 @@ fun AriaApp() {
     }
     var pairingCode by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("آماده") }
-
+    var status by remember { mutableStateOf("ARIA آماده است") }
+    var onlineMode by remember { mutableStateOf("CLOUD / LOCAL") }
     val messages = remember { mutableStateListOf<ChatItem>() }
 
     val tts = remember {
-        TextToSpeech(context) {}
+        TextToSpeech(context) { result ->
+            if (result == TextToSpeech.SUCCESS) {
+                tts.language = Locale("fa", "IR")
+            }
+        }
     }
 
     fun updateUi(block: () -> Unit) {
         uiHandler.post(block)
+    }
+
+    val voiceController = remember {
+        VoiceController(
+            context = context,
+            onText = { recognized ->
+                updateUi {
+                    message = recognized
+                    status = "متن صوتی آماده ارسال است"
+                }
+            },
+            onState = { newState ->
+                updateUi { status = newState }
+            }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            voiceController.destroy()
+            tts.shutdown()
+            executor.shutdownNow()
+        }
+    }
+
+    fun speak(text: String) {
+        tts.language = Locale("fa", "IR")
+        tts.setPitch(0.84f)
+        tts.setSpeechRate(0.92f)
+        tts.speak(
+            text,
+            TextToSpeech.QUEUE_FLUSH,
+            null,
+            "aria-answer"
+        )
     }
 
     fun pairCloud() {
@@ -109,11 +218,12 @@ fun AriaApp() {
 
                 updateUi {
                     cloudToken = token
+                    onlineMode = "CLOUD"
                     status = "Cloud متصل شد"
                 }
-            } catch (e: Exception) {
+            } catch (error: Exception) {
                 updateUi {
-                    status = "خطای Cloud: " + (e.message ?: "unknown")
+                    status = "خطای Cloud: " + (error.message ?: "unknown")
                 }
             }
         }
@@ -135,11 +245,12 @@ fun AriaApp() {
 
                 updateUi {
                     localToken = token
+                    onlineMode = "LAPTOP"
                     status = "لپ‌تاپ متصل شد"
                 }
-            } catch (e: Exception) {
+            } catch (error: Exception) {
                 updateUi {
-                    status = "خطای لپ‌تاپ: " + (e.message ?: "unknown")
+                    status = "خطای لپ‌تاپ: " + (error.message ?: "unknown")
                 }
             }
         }
@@ -162,7 +273,7 @@ fun AriaApp() {
                         response = api.chat(cloudUrl, cloudToken, prompt)
                         source = "Cloud"
                     } catch (_: Exception) {
-                        // Automatic local fallback.
+                        // Fall through to laptop.
                     }
                 }
 
@@ -172,41 +283,38 @@ fun AriaApp() {
                 }
 
                 if (response == null) {
-                    error("هیچ اتصال مجازی به ARIA موجود نیست")
+                    error("هیچ اتصال به ARIA موجود نیست")
                 }
 
                 val result = response ?: error("پاسخ دریافت نشد.")
-                val approval = if (result.requiresApproval) {
-                    "\n\n🔐 نیازمند تأیید مالک: " + result.permissionLevel
+                val approvalText = if (result.requiresApproval) {
+                    "
+
+🔐 نیازمند تأیید مالک: " + result.permissionLevel
                 } else {
                     ""
                 }
 
                 updateUi {
+                    onlineMode = source.uppercase(Locale.ROOT)
+                    status = "پاسخ از $source"
                     messages.add(
                         ChatItem(
                             owner = false,
-                            text = "[" + source + "] " + result.answer + approval
+                            text = result.answer + approvalText
                         )
                     )
-                    tts.language = Locale("fa", "IR")
-                    tts.speak(
-                        result.answer,
-                        TextToSpeech.QUEUE_FLUSH,
-                        null,
-                        "aria-answer"
-                    )
-                    status = "متصل از طریق " + source
+                    speak(result.answer)
                 }
-            } catch (e: Exception) {
+            } catch (error: Exception) {
                 updateUi {
+                    status = "ارتباط برقرار نشد"
                     messages.add(
                         ChatItem(
                             owner = false,
-                            text = "ARIA: خطا در اتصال. " + (e.message ?: "unknown")
+                            text = "ARIA: " + (error.message ?: "خطای ناشناخته")
                         )
                     )
-                    status = "اتصال برقرار نشد"
                 }
             }
         }
@@ -215,91 +323,277 @@ fun AriaApp() {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(AriaBackground)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    "ARIA",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "PERSONAL INTELLIGENCE CORE",
+                    color = AriaMuted,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            Text(
+                onlineMode,
+                color = AriaCyan,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            AriaEye()
+        }
+
         Text(
-            "ARIA",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Text(
-            "Cloud-first + Laptop fallback",
-            style = MaterialTheme.typography.bodyMedium
+            voiceStatus,
+            color = AriaMuted,
+            style = MaterialTheme.typography.bodySmall
         )
 
-        OutlinedTextField(
-            value = cloudUrl,
-            onValueChange = { cloudUrl = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("آدرس Cloud") },
-            placeholder = { Text("https://aria.example.com") }
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = cloudUrl,
+                onValueChange = { cloudUrl = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("Cloud") },
+                placeholder = { Text("https://...") }
+            )
+            OutlinedButton(onClick = { pairCloud() }) {
+                Text("اتصال")
+            }
+        }
 
-        OutlinedTextField(
-            value = localUrl,
-            onValueChange = { localUrl = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("آدرس لپ‌تاپ") },
-            placeholder = { Text("http://192.168.0.4:8765") }
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = localUrl,
+                onValueChange = { localUrl = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("Laptop") }
+            )
+            OutlinedButton(onClick = { pairLocal() }) {
+                Text("اتصال")
+            }
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = pairingCode,
                 onValueChange = { pairingCode = it },
                 modifier = Modifier.weight(1f),
-                label = { Text("کد اتصال") }
+                label = { Text("کد مالک") }
             )
-            Button(onClick = { pairLocal() }) {
-                Text("لپ‌تاپ")
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { pairCloud() }) {
-                Text("Cloud")
-            }
-            OutlinedButton(
-                onClick = {
-                    status = "Cloud: " + (if (cloudToken.isBlank()) "جفت نشده" else "متصل") +
-                        " | Laptop: " + (if (localToken.isBlank()) "جفت نشده" else "متصل")
-                }
+            Button(
+                onClick = requestMicPermission,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AriaCyanSoft,
+                    contentColor = AriaCyan
+                )
             ) {
-                Text("وضعیت")
+                Text("مجوز صدا")
             }
         }
-
-        Text(
-            "وضعیت: " + status,
-            style = MaterialTheme.typography.bodySmall
-        )
 
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(AriaPanel)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(messages) { item ->
                 Text(
-                    text = (if (item.owner) "تو: " else "ARIA: ") + item.text,
+                    text = (if (item.owner) "تو  ›  " else "ARIA  ›  ") + item.text,
+                    color = if (item.owner) AriaText else AriaCyan,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    if (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        voiceController.start()
+                    } else {
+                        requestMicPermission()
+                    }
+                },
+                modifier = Modifier.size(58.dp),
+                shape = CircleShape
+            ) {
+                Text("🎙")
+            }
+
             OutlinedTextField(
                 value = message,
                 onValueChange = { message = it },
                 modifier = Modifier.weight(1f),
-                label = { Text("پیام") }
+                label = { Text("با ARIA صحبت کن") }
             )
-            Button(onClick = { sendMessage() }) {
+
+            Button(
+                onClick = { sendMessage() },
+                modifier = Modifier.height(58.dp)
+            ) {
                 Text("ارسال")
             }
         }
+
+        Text(
+            "صوت فارسی: تشخیص گفتار دستگاه + TTS محلی",
+            color = AriaMuted,
+            style = MaterialTheme.typography.labelSmall
+        )
     }
+}
+
+@Composable
+private fun AriaEye() {
+    val transition = rememberInfiniteTransition(label = "aria-eye")
+    val pulse by transition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 1600,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+    val sweep by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 3600
+            )
+        ),
+        label = "sweep"
+    )
+
+    Canvas(modifier = Modifier.size(220.dp)) {
+        drawEye(pulse, sweep)
+    }
+}
+
+private fun DrawScope.drawEye(scale: Float, rotation: Float) {
+    val center = Offset(size.width / 2f, size.height / 2f)
+    val radius = 82f * scale
+
+    drawCircle(
+        color = AriaCyan.copy(alpha = 0.08f),
+        radius = radius + 22f
+    )
+    drawCircle(
+        color = AriaCyan.copy(alpha = 0.14f),
+        radius = radius + 10f,
+        style = Stroke(width = 2f)
+    )
+
+    val eye = Path().apply {
+        moveTo(center.x - 72f, center.y)
+        quadraticBezierTo(
+            center.x,
+            center.y - 58f,
+            center.x + 72f,
+            center.y
+        )
+        quadraticBezierTo(
+            center.x,
+            center.y + 58f,
+            center.x - 72f,
+            center.y
+        )
+        close()
+    }
+
+    drawPath(
+        eye,
+        color = AriaPanelSoft,
+        style = Stroke(width = 5f)
+    )
+
+    drawCircle(
+        color = AriaCyan.copy(alpha = 0.18f),
+        radius = 38f * scale
+    )
+    drawCircle(
+        color = AriaCyan,
+        radius = 24f * scale
+    )
+    drawCircle(
+        color = AriaBackground,
+        radius = 11f * scale
+    )
+    drawCircle(
+        color = AriaText.copy(alpha = 0.9f),
+        radius = 4f
+    )
+
+    drawArc(
+        color = AriaCyan,
+        startAngle = rotation,
+        sweepAngle = 70f,
+        useCenter = false,
+        topLeft = Rect(center.x - radius, center.y - radius, 2f * radius, 2f * radius),
+        style = Stroke(width = 4f, cap = StrokeCap.Round)
+    )
+
+    drawArc(
+        color = AriaCyan.copy(alpha = 0.35f),
+        startAngle = rotation + 180f,
+        sweepAngle = 55f,
+        useCenter = false,
+        topLeft = Rect(center.x - radius, center.y - radius, 2f * radius, 2f * radius),
+        style = Stroke(width = 2f, cap = StrokeCap.Round)
+    )
+
+    for (index in 0 until 8) {
+        val angle = (index * 45f + rotation) * Math.PI / 180.0
+        val inner = radius + 18f
+        val outer = radius + if (index % 2 == 0) 30f else 24f
+
+        drawLine(
+            color = AriaCyan.copy(alpha = if (index % 2 == 0) 0.7f else 0.28f),
+            start = Offset(
+                center.x + cos(angle).toFloat() * inner,
+                center.y + sin(angle).toFloat() * inner
+            ),
+            end = Offset(
+                center.x + cos(angle).toFloat() * outer,
+                center.y + sin(angle).toFloat() * outer
+            ),
+            strokeWidth = 2f,
+            cap = StrokeCap.Round
+        )
+    }
+
+    drawCircle(
+        color = AriaText.copy(alpha = 0.8f),
+        radius = 2.5f,
+        center = Offset(center.x + 34f, center.y - 24f)
+    )
 }
