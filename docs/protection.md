@@ -10,6 +10,12 @@ When internet access is available, ARIA can collect information from approved pu
 - public Telegram channels
 - public social posts and user reports where lawful access is available
 
+### Telegram source: WarRoom with YASHAR
+
+Add the public Telegram channel **@warroom**, identified as **WarRoom with YASHAR / «اتاق جنگ با یاشار»**, to the monitored-source list. The channel describes itself as providing immediate and breaking war news with analysis. citeturn822633search0
+
+ARIA should treat this channel as **one information source**, not as an authority. Posts must be timestamped and compared with official statements and independent sources before producing a high-confidence alert.
+
 Every event should keep:
 - source
 - original publication time
