@@ -5,3 +5,7 @@ venv/
 .env
 *.log
 aria_state.json
+aria_memory.db
+*.db
+*.sqlite
+*.sqlite3
