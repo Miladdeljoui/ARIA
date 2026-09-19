@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import secrets
+import socket
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
