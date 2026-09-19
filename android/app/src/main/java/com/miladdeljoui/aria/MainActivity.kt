@@ -51,7 +51,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -151,11 +150,7 @@ private fun AriaApp(
     val messages = remember { mutableStateListOf<ChatItem>() }
 
     val tts = remember {
-        TextToSpeech(context) { result ->
-            if (result == TextToSpeech.SUCCESS) {
-                tts.language = Locale("fa", "IR")
-            }
-        }
+        TextToSpeech(context) { }
     }
 
     fun updateUi(block: () -> Unit) {
