@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,7 +36,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -66,6 +64,14 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 private data class ChatItem(val owner: Boolean, val text: String)
+
+private val AriaCyan = Color(0xFF00E5FF)
+private val AriaCyanSoft = Color(0x2200E5FF)
+private val AriaBackground = Color(0xFF0B1220)
+private val AriaPanel = Color(0xFF121A2B)
+private val AriaPanelSoft = Color(0xFF1A2438)
+private val AriaText = Color(0xFFE8F1FF)
+private val AriaMuted = Color(0xFF8FA3C1)
 
 class MainActivity : ComponentActivity() {
     private val askPermission = registerForActivityResult(
@@ -145,7 +151,7 @@ private fun AriaApp(
     }
     var pairingCode by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("ARIA آماده است") }
+    var status by remember { mutableStateOf("ARIA آماده است — کد ۶ رقمی ترمینال سرور را وارد کن") }
     var onlineMode by remember { mutableStateOf("CLOUD / LOCAL") }
     val messages = remember { mutableStateListOf<ChatItem>() }
 
@@ -192,9 +198,20 @@ private fun AriaApp(
         )
     }
 
+    fun friendlyError(error: Exception): String {
+        return when (error) {
+            is AriaApi.AriaException -> error.message ?: "خطای ناشناخته"
+            else -> error.message ?: "خطای ناشناخته"
+        }
+    }
+
     fun pairCloud() {
         if (cloudUrl.isBlank()) {
             status = "آدرس Cloud را وارد کن."
+            return
+        }
+        if (pairingCode.filter { it.isDigit() }.length != 6) {
+            status = "کد جفت‌سازی باید دقیقاً ۶ رقم باشد."
             return
         }
 
@@ -214,17 +231,26 @@ private fun AriaApp(
                 updateUi {
                     cloudToken = token
                     onlineMode = "CLOUD"
-                    status = "Cloud متصل شد"
+                    status = "Cloud متصل شد ✓"
                 }
             } catch (error: Exception) {
                 updateUi {
-                    status = "خطای Cloud: " + (error.message ?: "unknown")
+                    status = "خطای Cloud: " + friendlyError(error)
                 }
             }
         }
     }
 
     fun pairLocal() {
+        if (localUrl.isBlank()) {
+            status = "آدرس لپ‌تاپ را وارد کن (مثلاً http://192.168.x.x:8765)"
+            return
+        }
+        if (pairingCode.filter { it.isDigit() }.length != 6) {
+            status = "کد جفت‌سازی باید دقیقاً ۶ رقم باشد. کد ترمینال سرور را ببین."
+            return
+        }
+
         executor.execute {
             try {
                 val token = api.pair(
@@ -241,11 +267,11 @@ private fun AriaApp(
                 updateUi {
                     localToken = token
                     onlineMode = "LAPTOP"
-                    status = "لپ‌تاپ متصل شد"
+                    status = "لپ‌تاپ متصل شد ✓"
                 }
             } catch (error: Exception) {
                 updateUi {
-                    status = "خطای لپ‌تاپ: " + (error.message ?: "unknown")
+                    status = "خطای لپ‌تاپ: " + friendlyError(error)
                 }
             }
         }
@@ -278,14 +304,12 @@ private fun AriaApp(
                 }
 
                 if (response == null) {
-                    error("هیچ اتصال به ARIA موجود نیست")
+                    error("هیچ اتصال به ARIA موجود نیست. ابتدا جفت‌سازی کن.")
                 }
 
                 val result = response ?: error("پاسخ دریافت نشد.")
                 val approvalText = if (result.requiresApproval) {
-                    "
-
-🔐 نیازمند تأیید مالک: " + result.permissionLevel
+                    "\n\n🔐 نیازمند تأیید مالک: " + result.permissionLevel
                 } else {
                     ""
                 }
@@ -307,7 +331,7 @@ private fun AriaApp(
                     messages.add(
                         ChatItem(
                             owner = false,
-                            text = "ARIA: " + (error.message ?: "خطای ناشناخته")
+                            text = "ARIA: " + friendlyError(error)
                         )
                     )
                 }
@@ -355,6 +379,12 @@ private fun AriaApp(
         }
 
         Text(
+            status,
+            color = AriaMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        Text(
             voiceStatus,
             color = AriaMuted,
             style = MaterialTheme.typography.bodySmall
@@ -388,9 +418,10 @@ private fun AriaApp(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = pairingCode,
-                onValueChange = { pairingCode = it },
+                onValueChange = { pairingCode = it.filter { ch -> ch.isDigit() }.take(6) },
                 modifier = Modifier.weight(1f),
-                label = { Text("کد مالک") }
+                label = { Text("کد ۶ رقمی مالک") },
+                placeholder = { Text("مثلاً 482917") }
             )
             Button(
                 onClick = requestMicPermission,

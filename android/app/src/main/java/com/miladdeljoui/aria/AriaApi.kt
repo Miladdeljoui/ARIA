@@ -13,6 +13,8 @@ data class AriaResponse(
 
 class AriaApi {
 
+    class AriaException(val errorCode: String, message: String) : Exception(message)
+
     private fun request(
         method: String,
         baseUrl: String,
@@ -25,7 +27,7 @@ class AriaApi {
         )
 
         connection.requestMethod = method
-        connection.connectTimeout = 5000
+        connection.connectTimeout = 8000
         connection.readTimeout = 120000
         connection.setRequestProperty(
             "Content-Type",
@@ -47,14 +49,28 @@ class AriaApi {
         val stream = if (responseCode in 200..299) {
             connection.inputStream
         } else {
-            connection.errorStream
+            connection.errorStream ?: connection.inputStream
         }
 
-        val raw = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
         connection.disconnect()
 
         if (responseCode !in 200..299) {
-            error("HTTP $responseCode: $raw")
+            val parsed = runCatching { JSONObject(raw) }.getOrNull()
+            val errorCode = parsed?.optString("error", "http_error") ?: "http_error"
+            val message = parsed?.optString("message")
+                ?.takeIf { it.isNotBlank() }
+                ?: when (errorCode) {
+                    "invalid_pairing_code" ->
+                        "کد جفت‌سازی اشتباه است. کد ۶ رقمی ترمینال سرور را وارد کنید."
+                    "unauthorized" ->
+                        "دستگاه هنوز جفت نشده یا توکن منقضی شده است."
+                    "ollama_unavailable" ->
+                        "Ollama روی سرور در دسترس نیست."
+                    else ->
+                        "خطای ارتباط (HTTP $responseCode)"
+                }
+            throw AriaException(errorCode, message)
         }
 
         return JSONObject(raw)
@@ -65,12 +81,20 @@ class AriaApi {
         code: String,
         deviceName: String
     ): String {
+        val cleanCode = code.trim().filter { it.isDigit() }
+        if (cleanCode.length != 6) {
+            throw AriaException(
+                "invalid_pairing_code",
+                "کد جفت‌سازی باید دقیقاً ۶ رقم باشد."
+            )
+        }
+
         val result = request(
             method = "POST",
             baseUrl = baseUrl,
             path = "/pair",
             body = JSONObject()
-                .put("code", code.trim())
+                .put("code", cleanCode)
                 .put("device_name", deviceName)
         )
         return result.getString("token")

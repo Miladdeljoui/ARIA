@@ -21,28 +21,56 @@ A mirror does not guarantee that every dependency or service will be available. 
 
 From the repository root:
 
-    cd server
-    pip install -r requirements.txt
-    python aria_server.py
+```bash
+cd server
+pip install -r requirements.txt
+python aria_server.py
+```
 
-The server prints a local URL and a six-digit Android pairing code.
+The server prints a local URL and a **six-digit Android pairing code**.
 
-Do not publish aria_state.json. It is ignored by Git.
+Example:
+
+```
+Server: http://192.168.1.42:8765
+Android pairing code: 482917
+  ↑ همین کد ۶ رقمی را در اپ اندروید وارد کن
+```
+
+Do not publish `aria_state.json`. It is ignored by Git.
+
+### اگر کد را گم کردی
+
+1. سرور را متوقف کن (Ctrl+C)
+2. فایل `aria_state.json` را حذف کن (در ریشه پروژه یا مسیر تنظیم‌شده)
+3. دوباره `python aria_server.py` را اجرا کن → کد جدید ساخته می‌شود
 
 ## Android Studio
 
-Open the android folder as an existing Android Studio project.
+Open the `android` folder as an existing Android Studio project.
 
 Use JDK 17 for the Gradle toolchain.
 
 Build and install the app on the phone.
 
-## Pairing
+## Pairing (جفت‌سازی)
 
-1. Enter the laptop URL shown by the Python server.
-2. Enter the six-digit pairing code.
-3. Press اتصال.
-4. Send a Persian message.
+1. آدرس لپ‌تاپ را وارد کن (مثلاً `http://192.168.1.42:8765`)
+2. **دقیقاً** همان کد ۶ رقمی که در ترمینال سرور چاپ شده را وارد کن
+3. دکمه **اتصال** را بزن
+4. اگر موفق شد پیام «لپ‌تاپ متصل شد ✓» را می‌بینی
+5. یک پیام فارسی بفرست
+
+### خطای `invalid_pairing_code`
+
+این خطا یعنی کد واردشده با کد سرور یکی نیست. دلایل رایج:
+
+- کد اشتباه تایپ شده (رقم کم/زیاد یا فاصله)
+- سرور قبلاً ریستارت شده و کد جدید ساخته شده
+- فایل `aria_state.json` پاک شده و کد عوض شده
+- داری به سرور دیگری (Cloud یا لپ‌تاپ دیگر) وصل می‌شوی
+
+راه‌حل: کد جدید را از ترمینال سرور کپی کن و دوباره اتصال بزن.
 
 The server creates a device token for this phone. The phone stores the token locally.
 

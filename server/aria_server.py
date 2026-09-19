@@ -37,6 +37,11 @@ def sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def normalize_pairing_code(code: str) -> str:
+    """فقط رقم‌ها را نگه دار و فاصله/کاراکتر اضافه را حذف کن."""
+    return "".join(ch for ch in str(code).strip() if ch.isdigit())
+
+
 def load_state() -> dict:
     with LOCK:
         if not STATE_FILE.exists():
@@ -70,6 +75,17 @@ def ensure_state() -> dict:
     state.setdefault("owner_name", OWNER_NAME)
     state.setdefault("devices", [])
     return state
+
+
+def regenerate_pairing_code() -> str:
+    """کد جفت‌سازی جدید بساز و دستگاه‌های قبلی را نگه دار (فقط کد عوض شود)."""
+    state = ensure_state()
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    state["pairing_code_hash"] = sha256(code)
+    state["pairing_code_display"] = code
+    state["pairing_regenerated_at"] = int(time.time())
+    save_state(state)
+    return code
 
 
 def ollama_available() -> bool:
@@ -182,6 +198,7 @@ class ARIAHandler(BaseHTTPRequestHandler):
                     "ollama": ollama_available(),
                     "internet": internet_available(),
                     "memory_items": len(MEMORY.search("", 100000)),
+                    "paired_devices": len(state.get("devices", [])),
                     "server_time": int(time.time()),
                 },
             )
@@ -189,25 +206,53 @@ class ARIAHandler(BaseHTTPRequestHandler):
 
         if self.path == "/memory":
             if not self.authorized():
-                send_json(self, 401, {"error": "unauthorized"})
+                send_json(self, 401, {"error": "unauthorized", "message": "دستگاه احراز هویت نشده است."})
                 return
             send_json(self, 200, {"memories": MEMORY.search("", 100)})
             return
 
-        send_json(self, 404, {"error": "not_found"})
+        send_json(self, 404, {"error": "not_found", "message": "مسیر پیدا نشد."})
 
     def do_POST(self) -> None:
         if self.path == "/pair":
             try:
                 data = self.read_json()
             except (ValueError, json.JSONDecodeError):
-                send_json(self, 400, {"error": "invalid_json"})
+                send_json(
+                    self,
+                    400,
+                    {
+                        "error": "invalid_json",
+                        "message": "بدنه درخواست JSON معتبر نیست.",
+                    },
+                )
                 return
 
             state = ensure_state()
-            code = str(data.get("code", "")).strip()
+            raw_code = str(data.get("code", ""))
+            code = normalize_pairing_code(raw_code)
+
+            if len(code) != 6:
+                send_json(
+                    self,
+                    400,
+                    {
+                        "error": "invalid_pairing_code",
+                        "message": "کد جفت‌سازی باید دقیقاً ۶ رقم باشد. کد نمایش‌داده‌شده در ترمینال سرور را وارد کنید.",
+                    },
+                )
+                return
+
             if sha256(code) != state.get("pairing_code_hash"):
-                send_json(self, 401, {"error": "invalid_pairing_code"})
+                print(f"[PAIR] کد نامعتبر از {self.address_string()}: '{raw_code}' → نرمال‌شده: '{code}'")
+                send_json(
+                    self,
+                    401,
+                    {
+                        "error": "invalid_pairing_code",
+                        "message": "کد جفت‌سازی اشتباه است. همان کد ۶ رقمی که هنگام اجرای سرور در ترمینال چاپ شده را وارد کنید. اگر کد را گم کرده‌اید، سرور را یک‌بار با حذف aria_state.json ریستارت کنید تا کد جدید ساخته شود.",
+                    },
+                )
                 return
 
             token = secrets.token_urlsafe(32)
@@ -221,6 +266,7 @@ class ARIAHandler(BaseHTTPRequestHandler):
             )
             save_state(state)
 
+            print(f"[PAIR] دستگاه جدید جفت شد: {device_name}")
             send_json(
                 self,
                 200,
@@ -230,19 +276,19 @@ class ARIAHandler(BaseHTTPRequestHandler):
 
         if self.path == "/memory/add":
             if not self.authorized():
-                send_json(self, 401, {"error": "unauthorized"})
+                send_json(self, 401, {"error": "unauthorized", "message": "دستگاه احراز هویت نشده است."})
                 return
 
             try:
                 data = self.read_json()
             except (ValueError, json.JSONDecodeError):
-                send_json(self, 400, {"error": "invalid_json"})
+                send_json(self, 400, {"error": "invalid_json", "message": "JSON نامعتبر است."})
                 return
 
             content = str(data.get("content", "")).strip()
             kind = str(data.get("kind", "note")).strip()[:40] or "note"
             if not content:
-                send_json(self, 400, {"error": "content_required"})
+                send_json(self, 400, {"error": "content_required", "message": "متن حافظه خالی است."})
                 return
 
             memory_id = MEMORY.add_memory(content, kind=kind, source="owner")
@@ -251,18 +297,18 @@ class ARIAHandler(BaseHTTPRequestHandler):
 
         if self.path == "/chat":
             if not self.authorized():
-                send_json(self, 401, {"error": "unauthorized"})
+                send_json(self, 401, {"error": "unauthorized", "message": "دستگاه احراز هویت نشده است. ابتدا جفت‌سازی کنید."})
                 return
 
             try:
                 data = self.read_json()
             except (ValueError, json.JSONDecodeError):
-                send_json(self, 400, {"error": "invalid_json"})
+                send_json(self, 400, {"error": "invalid_json", "message": "JSON نامعتبر است."})
                 return
 
             prompt = str(data.get("prompt", "")).strip()
             if not prompt:
-                send_json(self, 400, {"error": "prompt_required"})
+                send_json(self, 400, {"error": "prompt_required", "message": "پیام خالی است."})
                 return
 
             if not ollama_available():
@@ -271,6 +317,7 @@ class ARIAHandler(BaseHTTPRequestHandler):
                     503,
                     {
                         "error": "ollama_unavailable",
+                        "message": "Ollama در دسترس نیست. سرویس Ollama را روی لپ‌تاپ اجرا کنید.",
                         "internet": internet_available(),
                     },
                 )
@@ -282,7 +329,11 @@ class ARIAHandler(BaseHTTPRequestHandler):
                 send_json(
                     self,
                     503,
-                    {"error": "ollama_request_failed", "detail": str(exc)},
+                    {
+                        "error": "ollama_request_failed",
+                        "message": "ارتباط با مدل محلی ناموفق بود.",
+                        "detail": str(exc),
+                    },
                 )
                 return
 
@@ -301,7 +352,7 @@ class ARIAHandler(BaseHTTPRequestHandler):
             )
             return
 
-        send_json(self, 404, {"error": "not_found"})
+        send_json(self, 404, {"error": "not_found", "message": "مسیر پیدا نشد."})
 
 
 def local_ip() -> str:
@@ -324,10 +375,13 @@ def main() -> None:
     print(f"Model: {MODEL}")
     print(f"Server: http://{local_ip()}:{PORT}")
     print(f"Android pairing code: {state['pairing_code_display']}")
+    print("  ↑ همین کد ۶ رقمی را در اپ اندروید وارد کن")
     print(f"Ollama: {'OK' if ollama_available() else 'NOT READY'}")
     print(f"Internet: {'ONLINE' if internet_available() else 'OFFLINE'}")
     print(f"Memory DB: {MEMORY_DB}")
+    print(f"Paired devices: {len(state.get('devices', []))}")
     print("=" * 56)
+    print("نکته: اگر کد را گم کردی، فایل aria_state.json را پاک کن و سرور را دوباره اجرا کن.")
     print("برای توقف سرور: Ctrl+C")
 
     server = ThreadingHTTPServer((HOST, PORT), ARIAHandler)
