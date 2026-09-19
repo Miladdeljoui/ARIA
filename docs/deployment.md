@@ -2,8 +2,6 @@
 
 Use a Linux VPS, not shared Django hosting, for the Docker-based always-online node.
 
-KelonCloud currently lists Iran VPS plans including 4 GB RAM / 3 CPU and 8 GB RAM / 4 CPU options. Its Django hosting page says SSH is not provided, so the Django host is not suitable for the current Docker deployment. Provider prices and availability can change. citeturn912713search0turn856510view0
-
 ## Minimum
 
 - Ubuntu or another supported Linux distribution
@@ -12,6 +10,14 @@ KelonCloud currently lists Iran VPS plans including 4 GB RAM / 3 CPU and 8 GB RA
 - public IP
 - domain for HTTPS
 - Docker
+
+## Iran-aware network fallback
+
+Liara provides a mirrors page that can be used as a dependency/download fallback where an appropriate artifact is officially mirrored:
+
+https://liara.ir/mirrors/
+
+Mirror availability changes, so test the exact package or artifact before relying on it.
 
 ## Deploy
 
@@ -36,12 +42,10 @@ After startup, download the configured model:
 
 ## Android
 
-The app does not require Firebase, Google Sign-In or Google Maps at runtime. AndroidX dependencies still come from Google's Maven repository, so initial Gradle resolution needs access to that repository. GitHub Actions is included as a second build path.
-
-Current official Android documentation lists Android Studio Quail 4 2026.1.4 Patch 1 and AGP 9.4.0 as stable. AGP 9.4 uses Gradle 9.6.0 and JDK 17. citeturn321582search1turn321582search7
+The app does not require Firebase, Google Sign-In or Google Maps at runtime. AndroidX dependencies still need to be resolved during build. The repository includes GitHub Actions as a second build path.
 
 ## Revenue
 
-The first commercial layer is an AI-assisted service bot/web panel. Payment integration remains modular until the official API and credentials of an Iran-supported payment provider are available. Telegram's Bot API is HTTPS-based and supports messaging such as sendMessage. citeturn954509search0
+The first commercial layer is an AI-assisted service bot/web panel. Payment integration remains modular until the official API and credentials of an Iran-supported payment provider are available. Telegram's Bot API is HTTPS-based.
 
 Use only supported services and official access paths. Do not build around bypassing sanctions, account restrictions, or access controls.
