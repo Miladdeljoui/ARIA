@@ -1,0 +1,27 @@
+services:
+  aria:
+    build: .
+    container_name: aria-cloud
+    restart: unless-stopped
+    environment:
+      ARIA_OWNER_NAME: Milad
+      ARIA_MODEL: qwen3:1.7b
+      ARIA_OLLAMA_URL: http://ollama:11434/api/chat
+      ARIA_DB: /data/aria_cloud.db
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - aria-data:/data
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: aria-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+
+volumes:
+  aria-data:
+  ollama-data:
