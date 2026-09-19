@@ -1,11 +1,45 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
 .venv/
 venv/
 .env
+.env.*
+!.env.example
+
+# Logs
 *.log
+
+# ARIA secrets & local state — هرگز روی GitHub نروند
 aria_state.json
 aria_memory.db
+aria_learn_queue.json
+aria_cloud.db
 *.db
 *.sqlite
 *.sqlite3
+
+# Tokens / keys
+*.pem
+*.key
+secrets/
+credentials*
+*token*
+!**/tokenizer*
+
+# Generated local files
+generated/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Android local
+android/.gradle/
+android/local.properties
+android/**/build/
+*.apk
+*.aab
