@@ -75,6 +75,7 @@ class VoiceController(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR")
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
 
         recognizer.startListening(intent)
