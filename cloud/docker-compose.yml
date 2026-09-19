@@ -3,13 +3,13 @@ services:
     build: .
     container_name: aria-cloud
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      ARIA_OWNER_NAME: Milad
-      ARIA_MODEL: qwen3:1.7b
-      ARIA_OLLAMA_URL: http://ollama:11434/api/chat
       ARIA_DB: /data/aria_cloud.db
-    ports:
-      - "127.0.0.1:8000:8000"
+      ARIA_OLLAMA_URL: http://ollama:11434/api/chat
+    expose:
+      - "8000"
     volumes:
       - aria-data:/data
     depends_on:
@@ -22,6 +22,24 @@ services:
     volumes:
       - ollama-data:/root/.ollama
 
+  caddy:
+    image: caddy:2
+    container_name: aria-caddy
+    restart: unless-stopped
+    environment:
+      ARIA_DOMAIN: ${ARIA_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - aria
+
 volumes:
   aria-data:
   ollama-data:
+  caddy-data:
+  caddy-config:
