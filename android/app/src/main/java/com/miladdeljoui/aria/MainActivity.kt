@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -56,6 +59,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import java.util.Locale
@@ -65,13 +69,16 @@ import kotlin.math.sin
 
 private data class ChatItem(val owner: Boolean, val text: String)
 
-private val AriaCyan = Color(0xFF00E5FF)
-private val AriaCyanSoft = Color(0x2200E5FF)
-private val AriaBackground = Color(0xFF0B1220)
-private val AriaPanel = Color(0xFF121A2B)
-private val AriaPanelSoft = Color(0xFF1A2438)
-private val AriaText = Color(0xFFE8F1FF)
-private val AriaMuted = Color(0xFF8FA3C1)
+// پالت نزدیک به حس شیشه‌ای / فیروزه‌ای فیلم (الهام بصری، نه کپی)
+private val AriaCyan = Color(0xFF5EEAD4)
+private val AriaCyanDim = Color(0xFF2DD4BF)
+private val AriaCyanSoft = Color(0x335EEAD4)
+private val AriaGlass = Color(0x22A7F3D0)
+private val AriaBackground = Color(0xFF070B12)
+private val AriaPanel = Color(0xFF0F1623)
+private val AriaPanelSoft = Color(0xFF162033)
+private val AriaText = Color(0xFFE8F7F4)
+private val AriaMuted = Color(0xFF7A9E98)
 
 class MainActivity : ComponentActivity() {
     private val askPermission = registerForActivityResult(
@@ -88,16 +95,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             AriaTheme {
-                AriaApp(
-                    voiceStatus = voiceStatus.value,
+                AriaRoot(
+                    voiceStatus = voiceStatus,
                     requestMicPermission = {
                         if (ContextCompat.checkSelfPermission(
                                 this,
                                 Manifest.permission.RECORD_AUDIO
-                            ) == PackageManager.PERMISSION_GRANTED
+                            ) != PackageManager.PERMISSION_GRANTED
                         ) {
-                            Unit
-                        } else {
                             askPermission.launch(Manifest.permission.RECORD_AUDIO)
                         }
                     }
@@ -112,7 +117,7 @@ private fun AriaTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = androidx.compose.material3.darkColorScheme(
             primary = AriaCyan,
-            secondary = AriaCyan,
+            secondary = AriaCyanDim,
             background = AriaBackground,
             surface = AriaPanel,
             onBackground = AriaText,
@@ -123,9 +128,206 @@ private fun AriaTheme(content: @Composable () -> Unit) {
 }
 
 @Composable
+private fun AriaRoot(
+    voiceStatus: androidx.compose.runtime.MutableState<String>,
+    requestMicPermission: () -> Unit
+) {
+    val context = LocalContext.current
+    val lock = remember { OwnerLock(context) }
+    var unlocked by remember { mutableStateOf(false) }
+
+    if (!unlocked) {
+        OwnerLockScreen(
+            lock = lock,
+            voiceStatus = voiceStatus.value,
+            requestMicPermission = requestMicPermission,
+            onUnlocked = { unlocked = true },
+            onVoiceState = { voiceStatus.value = it }
+        )
+    } else {
+        AriaApp(
+            voiceStatus = voiceStatus.value,
+            requestMicPermission = requestMicPermission,
+            onVoiceState = { voiceStatus.value = it },
+            onLock = { unlocked = false }
+        )
+    }
+}
+
+@Composable
+private fun OwnerLockScreen(
+    lock: OwnerLock,
+    voiceStatus: String,
+    requestMicPermission: () -> Unit,
+    onUnlocked: () -> Unit,
+    onVoiceState: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val uiHandler = remember { Handler(Looper.getMainLooper()) }
+    var pin by remember { mutableStateOf("") }
+    var phrase by remember { mutableStateOf("") }
+    var confirmPhrase by remember { mutableStateOf("") }
+    var status by remember {
+        mutableStateOf(
+            if (lock.isConfigured()) "هویت مالک را تأیید کن"
+            else "اولین بار: رمز و عبارت صوتی خودت را بساز"
+        )
+    }
+    var setupMode by remember { mutableStateOf(!lock.isConfigured()) }
+
+    val voiceController = remember {
+        VoiceController(
+            context = context,
+            onText = { spoken ->
+                uiHandler.post {
+                    if (setupMode) {
+                        phrase = spoken
+                        status = "عبارت صوتی شنیده شد. تأیید کن."
+                    } else {
+                        if (lock.unlockWithVoice(spoken)) {
+                            status = "صدا تأیید شد"
+                            onUnlocked()
+                        } else {
+                            status = "عبارت صوتی اشتباه است"
+                        }
+                    }
+                }
+            },
+            onState = { s -> uiHandler.post { onVoiceState(s) } }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { voiceController.destroy() }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(AriaBackground, Color(0xFF0A1520), AriaBackground)
+                )
+            )
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(24.dp))
+        AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
+        Text(
+            "ARIA",
+            color = AriaCyan,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Light
+        )
+        Text(
+            if (setupMode) "راه‌اندازی هویت مالک" else "قفل هسته",
+            color = AriaMuted,
+            style = MaterialTheme.typography.labelMedium
+        )
+        Text(status, color = AriaText, style = MaterialTheme.typography.bodySmall)
+        Text(voiceStatus, color = AriaMuted, style = MaterialTheme.typography.labelSmall)
+
+        OutlinedTextField(
+            value = pin,
+            onValueChange = { pin = it.take(12) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(if (setupMode) "رمز جدید (حداقل ۴)" else "رمز مالک") },
+            visualTransformation = PasswordVisualTransformation()
+        )
+
+        if (setupMode) {
+            OutlinedTextField(
+                value = phrase,
+                onValueChange = { phrase = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("عبارت صوتی (یا با میکروفون بگو)") },
+                placeholder = { Text("مثلاً: آریا بیدار شو") }
+            )
+            OutlinedTextField(
+                value = confirmPhrase,
+                onValueChange = { confirmPhrase = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("تأیید عبارت صوتی") }
+            )
+            Button(
+                onClick = {
+                    val p = if (phrase.isNotBlank()) phrase else confirmPhrase
+                    if (p.isBlank()) {
+                        status = "عبارت صوتی لازم است"
+                        return@Button
+                    }
+                    if (confirmPhrase.isNotBlank() && normalizeSimple(phrase) != normalizeSimple(confirmPhrase)) {
+                        status = "عبارت و تأیید یکی نیستند"
+                        return@Button
+                    }
+                    if (lock.setup(pin, p)) {
+                        status = "قفل ذخیره شد"
+                        setupMode = false
+                        pin = ""
+                        phrase = ""
+                        confirmPhrase = ""
+                    } else {
+                        status = "رمز حداقل ۴ کاراکتر و عبارت حداقل ۳ حرف"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = AriaCyanDim)
+            ) {
+                Text("ذخیره قفل مالک")
+            }
+        } else {
+            Button(
+                onClick = {
+                    if (lock.unlockWithPin(pin)) {
+                        onUnlocked()
+                    } else {
+                        status = "رمز اشتباه است"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = AriaCyanDim)
+            ) {
+                Text("باز کردن با رمز")
+            }
+        }
+
+        OutlinedButton(
+            onClick = {
+                requestMicPermission()
+                voiceController.start()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (setupMode) "🎙 ضبط عبارت صوتی" else "🎙 باز کردن با صدا")
+        }
+
+        if (!setupMode) {
+            Text(
+                "عبارت صوتی: ${lock.voicePhraseHint()}",
+                color = AriaMuted,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+
+        Text(
+            "رمز و صدا فقط روی این گوشی ذخیره می‌شوند.",
+            color = AriaMuted,
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
+private fun normalizeSimple(t: String): String =
+    t.trim().lowercase().replace(Regex("\\s+"), " ")
+
+@Composable
 private fun AriaApp(
     voiceStatus: String,
-    requestMicPermission: () -> Unit
+    requestMicPermission: () -> Unit,
+    onVoiceState: (String) -> Unit,
+    onLock: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember {
@@ -151,8 +353,8 @@ private fun AriaApp(
     }
     var pairingCode by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("ARIA آماده است — کد ۶ رقمی ترمینال سرور را وارد کن") }
-    var onlineMode by remember { mutableStateOf("CLOUD / LOCAL") }
+    var status by remember { mutableStateOf("هسته باز است — به آرامی مشاهده می‌کند") }
+    var onlineMode by remember { mutableStateOf("STANDBY") }
     val messages = remember { mutableStateListOf<ChatItem>() }
 
     val tts = remember {
@@ -173,7 +375,7 @@ private fun AriaApp(
                 }
             },
             onState = { newState ->
-                updateUi { status = newState }
+                updateUi { onVoiceState(newState) }
             }
         )
     }
@@ -188,14 +390,9 @@ private fun AriaApp(
 
     fun speak(text: String) {
         tts.language = Locale("fa", "IR")
-        tts.setPitch(0.84f)
-        tts.setSpeechRate(0.92f)
-        tts.speak(
-            text,
-            TextToSpeech.QUEUE_FLUSH,
-            null,
-            "aria-answer"
-        )
+        tts.setPitch(0.88f)
+        tts.setSpeechRate(0.90f)
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "aria-answer")
     }
 
     fun friendlyError(error: Exception): String {
@@ -214,65 +411,47 @@ private fun AriaApp(
             status = "کد جفت‌سازی باید دقیقاً ۶ رقم باشد."
             return
         }
-
         executor.execute {
             try {
-                val token = api.pair(
-                    baseUrl = cloudUrl,
-                    code = pairingCode,
-                    deviceName = "ARIA Android Cloud"
-                )
-
+                val token = api.pair(cloudUrl, pairingCode, "ARIA Android Cloud")
                 prefs.edit()
                     .putString("cloud_url", cloudUrl.trimEnd('/'))
                     .putString("cloud_token", token)
                     .apply()
-
                 updateUi {
                     cloudToken = token
                     onlineMode = "CLOUD"
-                    status = "Cloud متصل شد ✓"
+                    status = "Cloud متصل شد"
                 }
             } catch (error: Exception) {
-                updateUi {
-                    status = "خطای Cloud: " + friendlyError(error)
-                }
+                updateUi { status = "Cloud: " + friendlyError(error) }
             }
         }
     }
 
     fun pairLocal() {
         if (localUrl.isBlank()) {
-            status = "آدرس لپ‌تاپ را وارد کن (مثلاً http://192.168.x.x:8765)"
+            status = "آدرس لپ‌تاپ را وارد کن"
             return
         }
         if (pairingCode.filter { it.isDigit() }.length != 6) {
-            status = "کد جفت‌سازی باید دقیقاً ۶ رقم باشد. کد ترمینال سرور را ببین."
+            status = "کد ۶ رقمی ترمینال سرور لازم است"
             return
         }
-
         executor.execute {
             try {
-                val token = api.pair(
-                    baseUrl = localUrl,
-                    code = pairingCode,
-                    deviceName = "ARIA Android Local"
-                )
-
+                val token = api.pair(localUrl, pairingCode, "ARIA Android Local")
                 prefs.edit()
                     .putString("local_url", localUrl.trimEnd('/'))
                     .putString("local_token", token)
                     .apply()
-
                 updateUi {
                     localToken = token
-                    onlineMode = "LAPTOP"
-                    status = "لپ‌تاپ متصل شد ✓"
+                    onlineMode = "LOCAL"
+                    status = "لپ‌تاپ متصل شد"
                 }
             } catch (error: Exception) {
-                updateUi {
-                    status = "خطای لپ‌تاپ: " + friendlyError(error)
-                }
+                updateUi { status = "لپ‌تاپ: " + friendlyError(error) }
             }
         }
     }
@@ -280,8 +459,7 @@ private fun AriaApp(
     fun sendMessage() {
         val prompt = message.trim()
         if (prompt.isBlank()) return
-
-        messages.add(ChatItem(owner = true, text = prompt))
+        messages.add(ChatItem(true, prompt))
         message = ""
 
         executor.execute {
@@ -294,46 +472,31 @@ private fun AriaApp(
                         response = api.chat(cloudUrl, cloudToken, prompt)
                         source = "Cloud"
                     } catch (_: Exception) {
-                        // Fall through to laptop.
                     }
                 }
-
                 if (response == null && localToken.isNotBlank() && localUrl.isNotBlank()) {
                     response = api.chat(localUrl, localToken, prompt)
-                    source = "Laptop"
+                    source = "Local"
                 }
-
                 if (response == null) {
-                    error("هیچ اتصال به ARIA موجود نیست. ابتدا جفت‌سازی کن.")
+                    error("اتصال به ARIA نیست. اول جفت‌سازی کن. اگر ollama_unavailable دیدی روی لپ‌تاپ: ollama serve")
                 }
 
-                val result = response ?: error("پاسخ دریافت نشد.")
-                val approvalText = if (result.requiresApproval) {
-                    "\n\n🔐 نیازمند تأیید مالک: " + result.permissionLevel
-                } else {
-                    ""
-                }
+                val result = response!!
+                val approval = if (result.requiresApproval) {
+                    "\n\nنیازمند تأیید مالک · ${result.permissionLevel}"
+                } else ""
 
                 updateUi {
                     onlineMode = source.uppercase(Locale.ROOT)
                     status = "پاسخ از $source"
-                    messages.add(
-                        ChatItem(
-                            owner = false,
-                            text = result.answer + approvalText
-                        )
-                    )
+                    messages.add(ChatItem(false, result.answer + approval))
                     speak(result.answer)
                 }
             } catch (error: Exception) {
                 updateUi {
-                    status = "ارتباط برقرار نشد"
-                    messages.add(
-                        ChatItem(
-                            owner = false,
-                            text = "ARIA: " + friendlyError(error)
-                        )
-                    )
+                    status = "قطع ارتباط"
+                    messages.add(ChatItem(false, friendlyError(error)))
                 }
             }
         }
@@ -352,57 +515,31 @@ private fun AriaApp(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(
-                    "ARIA",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "PERSONAL INTELLIGENCE CORE",
-                    color = AriaMuted,
-                    style = MaterialTheme.typography.labelSmall
-                )
+                Text("ARIA", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Light, color = AriaCyan)
+                Text("OBSERVING · LOCAL CORE", color = AriaMuted, style = MaterialTheme.typography.labelSmall)
             }
-
-            Text(
-                onlineMode,
-                color = AriaCyan,
-                style = MaterialTheme.typography.labelSmall
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(onlineMode, color = AriaCyan, style = MaterialTheme.typography.labelSmall)
+                OutlinedButton(onClick = onLock) { Text("قفل") }
+            }
         }
 
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            AriaEye()
+        Box(Modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
         }
 
-        Text(
-            status,
-            color = AriaMuted,
-            style = MaterialTheme.typography.bodySmall
-        )
-
-        Text(
-            voiceStatus,
-            color = AriaMuted,
-            style = MaterialTheme.typography.bodySmall
-        )
+        Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+        Text(voiceStatus, color = AriaMuted, style = MaterialTheme.typography.labelSmall)
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = cloudUrl,
                 onValueChange = { cloudUrl = it },
                 modifier = Modifier.weight(1f),
-                label = { Text("Cloud") },
-                placeholder = { Text("https://...") }
+                label = { Text("Cloud") }
             )
-            OutlinedButton(onClick = { pairCloud() }) {
-                Text("اتصال")
-            }
+            OutlinedButton(onClick = { pairCloud() }) { Text("اتصال") }
         }
-
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = localUrl,
@@ -410,42 +547,33 @@ private fun AriaApp(
                 modifier = Modifier.weight(1f),
                 label = { Text("Laptop") }
             )
-            OutlinedButton(onClick = { pairLocal() }) {
-                Text("اتصال")
-            }
+            OutlinedButton(onClick = { pairLocal() }) { Text("اتصال") }
         }
-
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = pairingCode,
-                onValueChange = { pairingCode = it.filter { ch -> ch.isDigit() }.take(6) },
+                onValueChange = { pairingCode = it.filter { c -> c.isDigit() }.take(6) },
                 modifier = Modifier.weight(1f),
-                label = { Text("کد ۶ رقمی مالک") },
-                placeholder = { Text("مثلاً 482917") }
+                label = { Text("کد ۶ رقمی") }
             )
             Button(
                 onClick = requestMicPermission,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AriaCyanSoft,
-                    contentColor = AriaCyan
-                )
-            ) {
-                Text("مجوز صدا")
-            }
+                colors = ButtonDefaults.buttonColors(containerColor = AriaCyanSoft, contentColor = AriaCyan)
+            ) { Text("مجوز صدا") }
         }
 
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(AriaPanel)
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(messages) { item ->
                 Text(
-                    text = (if (item.owner) "تو  ›  " else "ARIA  ›  ") + item.text,
+                    text = (if (item.owner) "تو · " else "ARIA · ") + item.text,
                     color = if (item.owner) AriaText else AriaCyan,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -455,56 +583,37 @@ private fun AriaApp(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = {
-                    if (ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                        == PackageManager.PERMISSION_GRANTED
                     ) {
                         voiceController.start()
-                    } else {
-                        requestMicPermission()
-                    }
+                    } else requestMicPermission()
                 },
-                modifier = Modifier.size(58.dp),
+                modifier = Modifier.size(56.dp),
                 shape = CircleShape
-            ) {
-                Text("🎙")
-            }
+            ) { Text("🎙") }
 
             OutlinedTextField(
                 value = message,
                 onValueChange = { message = it },
                 modifier = Modifier.weight(1f),
-                label = { Text("با ARIA صحبت کن") }
+                label = { Text("با ARIA حرف بزن") }
             )
-
-            Button(
-                onClick = { sendMessage() },
-                modifier = Modifier.height(58.dp)
-            ) {
+            Button(onClick = { sendMessage() }, modifier = Modifier.height(56.dp)) {
                 Text("ارسال")
             }
         }
-
-        Text(
-            "صوت فارسی: تشخیص گفتار دستگاه + TTS محلی",
-            color = AriaMuted,
-            style = MaterialTheme.typography.labelSmall
-        )
     }
 }
 
 @Composable
-private fun AriaEye() {
-    val transition = rememberInfiniteTransition(label = "aria-eye")
+private fun AvaCore(listening: Boolean) {
+    val transition = rememberInfiniteTransition(label = "ava")
     val pulse by transition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.06f,
+        initialValue = 0.96f,
+        targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 1600,
-                easing = FastOutSlowInEasing
-            ),
+            animation = tween(2200, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
@@ -513,113 +622,71 @@ private fun AriaEye() {
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 3600
-            )
+            animation = tween(8000, easing = LinearEasing)
         ),
         label = "sweep"
     )
+    val blink by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (listening) 1f else 0.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(if (listening) 400 else 3200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "blink"
+    )
 
-    Canvas(modifier = Modifier.size(220.dp)) {
-        drawEye(pulse, sweep)
+    Canvas(modifier = Modifier.size(200.dp)) {
+        drawAvaCore(pulse, sweep, blink, listening)
     }
 }
 
-private fun DrawScope.drawEye(scale: Float, rotation: Float) {
+private fun DrawScope.drawAvaCore(scale: Float, rotation: Float, lid: Float, listening: Boolean) {
     val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = 82f * scale
+    val radius = 70f * scale
 
+    // هاله شیشه‌ای
+    drawCircle(color = AriaGlass, radius = radius + 28f)
     drawCircle(
-        color = AriaCyan.copy(alpha = 0.08f),
-        radius = radius + 22f
-    )
-    drawCircle(
-        color = AriaCyan.copy(alpha = 0.14f),
-        radius = radius + 10f,
-        style = Stroke(width = 2f)
+        color = AriaCyan.copy(alpha = 0.12f),
+        radius = radius + 14f,
+        style = Stroke(width = 1.5f)
     )
 
+    // قاب چشم بیضی نرم
     val eye = Path().apply {
-        moveTo(center.x - 72f, center.y)
-        quadraticBezierTo(
-            center.x,
-            center.y - 58f,
-            center.x + 72f,
-            center.y
-        )
-        quadraticBezierTo(
-            center.x,
-            center.y + 58f,
-            center.x - 72f,
-            center.y
-        )
+        moveTo(center.x - 64f, center.y)
+        quadraticBezierTo(center.x, center.y - 48f * lid, center.x + 64f, center.y)
+        quadraticBezierTo(center.x, center.y + 48f * lid, center.x - 64f, center.y)
         close()
     }
+    drawPath(eye, color = AriaPanelSoft, style = Stroke(width = 3f))
 
-    drawPath(
-        eye,
-        color = AriaPanelSoft,
-        style = Stroke(width = 5f)
-    )
+    // مردمک
+    drawCircle(color = AriaCyan.copy(alpha = 0.2f), radius = 32f * scale * lid)
+    drawCircle(color = AriaCyanDim.copy(alpha = 0.85f), radius = 18f * scale * lid)
+    drawCircle(color = AriaBackground, radius = 8f * scale * lid)
+    drawCircle(color = AriaText.copy(alpha = 0.9f), radius = 3f * lid)
 
-    drawCircle(
-        color = AriaCyan.copy(alpha = 0.18f),
-        radius = 38f * scale
-    )
-    drawCircle(
-        color = AriaCyan,
-        radius = 24f * scale
-    )
-    drawCircle(
-        color = AriaBackground,
-        radius = 11f * scale
-    )
-    drawCircle(
-        color = AriaText.copy(alpha = 0.9f),
-        radius = 4f
-    )
-
+    // حلقه اسکن آرام
     drawArc(
-        color = AriaCyan,
+        color = AriaCyan.copy(alpha = if (listening) 0.9f else 0.45f),
         startAngle = rotation,
-        sweepAngle = 70f,
+        sweepAngle = if (listening) 100f else 55f,
         useCenter = false,
         topLeft = Rect(center.x - radius, center.y - radius, 2f * radius, 2f * radius),
-        style = Stroke(width = 4f, cap = StrokeCap.Round)
+        style = Stroke(width = 2.5f, cap = StrokeCap.Round)
     )
 
-    drawArc(
-        color = AriaCyan.copy(alpha = 0.35f),
-        startAngle = rotation + 180f,
-        sweepAngle = 55f,
-        useCenter = false,
-        topLeft = Rect(center.x - radius, center.y - radius, 2f * radius, 2f * radius),
-        style = Stroke(width = 2f, cap = StrokeCap.Round)
-    )
-
-    for (index in 0 until 8) {
-        val angle = (index * 45f + rotation) * Math.PI / 180.0
-        val inner = radius + 18f
-        val outer = radius + if (index % 2 == 0) 30f else 24f
-
+    // خطوط شبکه ظریف (حس مش چهره — انتزاعی)
+    for (i in 0 until 6) {
+        val a = (i * 60f + rotation * 0.3f) * Math.PI / 180.0
         drawLine(
-            color = AriaCyan.copy(alpha = if (index % 2 == 0) 0.7f else 0.28f),
-            start = Offset(
-                center.x + cos(angle).toFloat() * inner,
-                center.y + sin(angle).toFloat() * inner
-            ),
-            end = Offset(
-                center.x + cos(angle).toFloat() * outer,
-                center.y + sin(angle).toFloat() * outer
-            ),
-            strokeWidth = 2f,
+            color = AriaCyan.copy(alpha = 0.2f),
+            start = Offset(center.x + cos(a).toFloat() * (radius - 8f), center.y + sin(a).toFloat() * (radius - 8f)),
+            end = Offset(center.x + cos(a).toFloat() * (radius + 10f), center.y + sin(a).toFloat() * (radius + 10f)),
+            strokeWidth = 1.2f,
             cap = StrokeCap.Round
         )
     }
-
-    drawCircle(
-        color = AriaText.copy(alpha = 0.8f),
-        radius = 2.5f,
-        center = Offset(center.x + 34f, center.y - 24f)
-    )
 }

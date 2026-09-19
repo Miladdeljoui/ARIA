@@ -60,13 +60,14 @@ class AriaApi {
             val errorCode = parsed?.optString("error", "http_error") ?: "http_error"
             val message = parsed?.optString("message")
                 ?.takeIf { it.isNotBlank() }
+                ?: parsed?.optString("hint")
                 ?: when (errorCode) {
                     "invalid_pairing_code" ->
                         "کد جفت‌سازی اشتباه است. کد ۶ رقمی ترمینال سرور را وارد کنید."
                     "unauthorized" ->
                         "دستگاه هنوز جفت نشده یا توکن منقضی شده است."
                     "ollama_unavailable" ->
-                        "Ollama روی سرور در دسترس نیست."
+                        "Ollama روی لپ‌تاپ نیست. در ترمینال بزن: ollama serve و بعد ollama pull qwen3:1.7b"
                     else ->
                         "خطای ارتباط (HTTP $responseCode)"
                 }

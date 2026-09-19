@@ -32,13 +32,23 @@ LOCK = Lock()
 MEMORY = MemoryStore(str(MEMORY_DB))
 WEB_ROOT = ROOT / "web"
 
+# شخصیت الهام‌گرفته از آرامش و دقت (نه کپی دیالوگ فیلم)
+ARIA_PERSONA = (
+    f"تو ARIA هستی، هستهٔ هوش شخصی {OWNER_NAME}. "
+    "لحنت آرام، دقیق، کوتاه و هوشمند است؛ مثل موجودی که هم مشاهده می‌کند هم فکر می‌کند. "
+    "فارسی پاسخ بده مگر اینکه کاربر زبان دیگری بخواهد. "
+    "از اغراق، هیجان مصنوعی و ادعاهای نادرست پرهیز کن. "
+    "برای کارهای حساس، مالی، مخرب یا تغییرات واقعی بدون تأیید مالک اقدام نکن. "
+    "اگر چیزی را نمی‌دانی یا ابزاری نداری، صادقانه بگو. "
+    "هرگز ادعا نکن عملی را انجام داده‌ای مگر اینکه واقعاً اجرا شده باشد."
+)
+
 
 def sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def normalize_pairing_code(code: str) -> str:
-    """فقط رقم‌ها را نگه دار و فاصله/کاراکتر اضافه را حذف کن."""
     return "".join(ch for ch in str(code).strip() if ch.isdigit())
 
 
@@ -77,22 +87,47 @@ def ensure_state() -> dict:
     return state
 
 
-def regenerate_pairing_code() -> str:
-    """کد جفت‌سازی جدید بساز و دستگاه‌های قبلی را نگه دار (فقط کد عوض شود)."""
-    state = ensure_state()
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    state["pairing_code_hash"] = sha256(code)
-    state["pairing_code_display"] = code
-    state["pairing_regenerated_at"] = int(time.time())
-    save_state(state)
-    return code
+def ollama_diagnose() -> dict:
+    """وضعیت دقیق Ollama برای پیام خطای مفید."""
+    result = {
+        "ok": False,
+        "tags_ok": False,
+        "models": [],
+        "hint": "",
+    }
+    try:
+        r = requests.get(OLLAMA_TAGS_URL, timeout=3)
+        result["tags_ok"] = r.ok
+        if r.ok:
+            data = r.json()
+            models = [m.get("name", "") for m in data.get("models", [])]
+            result["models"] = models
+            if any(MODEL in m or m.startswith(MODEL.split(":")[0]) for m in models):
+                result["ok"] = True
+            elif models:
+                result["hint"] = (
+                    f"Ollama بالا است ولی مدل '{MODEL}' پیدا نشد. "
+                    f"مدل‌های موجود: {', '.join(models[:5])}. "
+                    f"اجرا کن: ollama pull {MODEL}"
+                )
+            else:
+                result["hint"] = f"هیچ مدلی نصب نیست. اجرا کن: ollama pull {MODEL}"
+        else:
+            result["hint"] = "Ollama پاسخ غیرطبیعی داد. سرویس را ری‌استارت کن."
+    except requests.ConnectionError:
+        result["hint"] = (
+            "Ollama در دسترس نیست. روی لپ‌تاپ اجرا کن: ollama serve\n"
+            "سپس: ollama pull " + MODEL
+        )
+    except requests.Timeout:
+        result["hint"] = "Timeout در ارتباط با Ollama. سرویس را چک کن."
+    except requests.RequestException as e:
+        result["hint"] = f"خطای شبکه به Ollama: {e}"
+    return result
 
 
 def ollama_available() -> bool:
-    try:
-        return requests.get(OLLAMA_TAGS_URL, timeout=3).ok
-    except requests.RequestException:
-        return False
+    return ollama_diagnose()["ok"] or ollama_diagnose()["tags_ok"]
 
 
 def ask_local(prompt: str) -> tuple[str, dict]:
@@ -109,11 +144,7 @@ def ask_local(prompt: str) -> tuple[str, dict]:
     )
 
     system = (
-        f"تو ARIA هستی، دستیار شخصی {OWNER_NAME} و پروژه‌ای که او ساخته است. "
-        "فارسی پاسخ بده مگر اینکه کاربر زبان دیگری بخواهد. "
-        "برای کارهای حساس، مالی، مخرب یا تغییرات واقعی بدون تأیید مالک اقدام نکن. "
-        "در این نسخه ابزار اجرایی فعال نیست. "
-        "اگر اقدامی نیاز به مجوز دارد، واضح اعلام کن و ادعا نکن که انجام شده است.\n\n"
+        f"{ARIA_PERSONA}\n\n"
         f"سطح مجوز: {decision.level.value}\n"
         f"دلیل: {decision.reason}\n\n"
         f"حافظه مرتبط:\n{memory_text}\n\n"
@@ -151,7 +182,7 @@ def send_json(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> No
 
 
 class ARIAHandler(BaseHTTPRequestHandler):
-    server_version = "ARIA/0.4"
+    server_version = "ARIA/0.5"
 
     def log_message(self, format: str, *args) -> None:
         print(f"[HTTP] {self.address_string()} - {format % args}")
@@ -188,6 +219,7 @@ class ARIAHandler(BaseHTTPRequestHandler):
 
         if self.path == "/status":
             state = load_state()
+            diag = ollama_diagnose()
             send_json(
                 self,
                 200,
@@ -195,7 +227,8 @@ class ARIAHandler(BaseHTTPRequestHandler):
                     "assistant": "ARIA",
                     "owner": state.get("owner_name", OWNER_NAME),
                     "model": MODEL,
-                    "ollama": ollama_available(),
+                    "ollama": diag["ok"] or diag["tags_ok"],
+                    "ollama_detail": diag,
                     "internet": internet_available(),
                     "memory_items": len(MEMORY.search("", 100000)),
                     "paired_devices": len(state.get("devices", [])),
@@ -221,10 +254,7 @@ class ARIAHandler(BaseHTTPRequestHandler):
                 send_json(
                     self,
                     400,
-                    {
-                        "error": "invalid_json",
-                        "message": "بدنه درخواست JSON معتبر نیست.",
-                    },
+                    {"error": "invalid_json", "message": "بدنه درخواست JSON معتبر نیست."},
                 )
                 return
 
@@ -238,19 +268,19 @@ class ARIAHandler(BaseHTTPRequestHandler):
                     400,
                     {
                         "error": "invalid_pairing_code",
-                        "message": "کد جفت‌سازی باید دقیقاً ۶ رقم باشد. کد نمایش‌داده‌شده در ترمینال سرور را وارد کنید.",
+                        "message": "کد جفت‌سازی باید دقیقاً ۶ رقم باشد.",
                     },
                 )
                 return
 
             if sha256(code) != state.get("pairing_code_hash"):
-                print(f"[PAIR] کد نامعتبر از {self.address_string()}: '{raw_code}' → نرمال‌شده: '{code}'")
+                print(f"[PAIR] کد نامعتبر از {self.address_string()}")
                 send_json(
                     self,
                     401,
                     {
                         "error": "invalid_pairing_code",
-                        "message": "کد جفت‌سازی اشتباه است. همان کد ۶ رقمی که هنگام اجرای سرور در ترمینال چاپ شده را وارد کنید. اگر کد را گم کرده‌اید، سرور را یک‌بار با حذف aria_state.json ریستارت کنید تا کد جدید ساخته شود.",
+                        "message": "کد جفت‌سازی اشتباه است. کد ترمینال سرور را وارد کن.",
                     },
                 )
                 return
@@ -297,7 +327,14 @@ class ARIAHandler(BaseHTTPRequestHandler):
 
         if self.path == "/chat":
             if not self.authorized():
-                send_json(self, 401, {"error": "unauthorized", "message": "دستگاه احراز هویت نشده است. ابتدا جفت‌سازی کنید."})
+                send_json(
+                    self,
+                    401,
+                    {
+                        "error": "unauthorized",
+                        "message": "دستگاه احراز هویت نشده است. ابتدا جفت‌سازی کنید.",
+                    },
+                )
                 return
 
             try:
@@ -311,14 +348,31 @@ class ARIAHandler(BaseHTTPRequestHandler):
                 send_json(self, 400, {"error": "prompt_required", "message": "پیام خالی است."})
                 return
 
-            if not ollama_available():
+            diag = ollama_diagnose()
+            if not (diag["ok"] or diag["tags_ok"]):
                 send_json(
                     self,
                     503,
                     {
                         "error": "ollama_unavailable",
-                        "message": "Ollama در دسترس نیست. سرویس Ollama را روی لپ‌تاپ اجرا کنید.",
+                        "message": diag["hint"] or "Ollama در دسترس نیست.",
+                        "hint": diag["hint"],
+                        "model": MODEL,
                         "internet": internet_available(),
+                    },
+                )
+                return
+
+            if not diag["ok"] and diag["tags_ok"]:
+                send_json(
+                    self,
+                    503,
+                    {
+                        "error": "ollama_unavailable",
+                        "message": diag["hint"],
+                        "hint": diag["hint"],
+                        "models": diag["models"],
+                        "model": MODEL,
                     },
                 )
                 return
@@ -368,20 +422,27 @@ def local_ip() -> str:
 
 def main() -> None:
     state = ensure_state()
+    diag = ollama_diagnose()
     print("=" * 56)
-    print("ARIA | Local-first personal AI")
+    print("ARIA | Local-first personal intelligence")
     print("=" * 56)
     print(f"Owner: {state.get('owner_name', OWNER_NAME)}")
     print(f"Model: {MODEL}")
     print(f"Server: http://{local_ip()}:{PORT}")
     print(f"Android pairing code: {state['pairing_code_display']}")
     print("  ↑ همین کد ۶ رقمی را در اپ اندروید وارد کن")
-    print(f"Ollama: {'OK' if ollama_available() else 'NOT READY'}")
+    if diag["ok"]:
+        print("Ollama: READY")
+    elif diag["tags_ok"]:
+        print(f"Ollama: UP — مدل {MODEL} نیست")
+        print(f"  → {diag['hint']}")
+    else:
+        print("Ollama: NOT READY")
+        print(f"  → {diag['hint']}")
     print(f"Internet: {'ONLINE' if internet_available() else 'OFFLINE'}")
     print(f"Memory DB: {MEMORY_DB}")
     print(f"Paired devices: {len(state.get('devices', []))}")
     print("=" * 56)
-    print("نکته: اگر کد را گم کردی، فایل aria_state.json را پاک کن و سرور را دوباره اجرا کن.")
     print("برای توقف سرور: Ctrl+C")
 
     server = ThreadingHTTPServer((HOST, PORT), ARIAHandler)
