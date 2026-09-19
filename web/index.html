@@ -3,76 +3,240 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ARIA • Transcendence Core</title>
+<title>ARIA • JARVIS Core</title>
 <style>
 :root {
-  --bg: #030508;
-  --panel: #0a0f16;
-  --cyan: #5eead4;
-  --cyan2: #2dd4bf;
-  --text: #e8f7f4;
-  --muted: #6b8f88;
-  --warn: #fbbf24;
+  --bg: #02060c;
+  --panel: rgba(8, 18, 32, 0.92);
+  --jarvis: #33c3ff;
+  --jarvis2: #1a8cff;
+  --glow: rgba(51, 195, 255, 0.45);
+  --text: #e6f6ff;
+  --muted: #7aa0b8;
+  --warn: #ffcc66;
+  --danger: #ff6b7a;
 }
 * { box-sizing: border-box; }
 body {
-  margin: 0; min-height: 100vh; color: var(--text);
-  font-family: system-ui, Tahoma, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: "Segoe UI", Tahoma, system-ui, sans-serif;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(45,212,191,.12), transparent 42%),
-    radial-gradient(circle at 80% 90%, rgba(94,234,212,.04), transparent 30%),
-    var(--bg);
+    radial-gradient(ellipse at 50% 15%, rgba(26, 140, 255, 0.18), transparent 45%),
+    radial-gradient(circle at 10% 90%, rgba(51, 195, 255, 0.06), transparent 35%),
+    linear-gradient(180deg, #01040a, #02060c 40%, #031018);
 }
-main { width: min(1100px, 94vw); margin: 0 auto; padding: 22px 0 40px; }
-header { display:flex; justify-content:space-between; align-items:center; }
-h1 { margin:0; font-weight:300; letter-spacing:.12em; color:var(--cyan); }
-.sub { color:var(--muted); font-size:11px; letter-spacing:.2em; margin-top:4px; }
-.badge { border:1px solid rgba(94,234,212,.35); color:var(--cyan); padding:8px 14px; border-radius:999px; font-size:11px; letter-spacing:.08em; }
-.grid { display:grid; grid-template-columns: 340px 1fr; gap:16px; margin-top:18px; }
+main { width: min(1120px, 95vw); margin: 0 auto; padding: 20px 0 36px; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+h1 {
+  margin: 0;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  color: var(--jarvis);
+  text-shadow: 0 0 18px var(--glow);
+}
+.sub { color: var(--muted); font-size: 11px; letter-spacing: 0.24em; margin-top: 4px; }
+.badge {
+  border: 1px solid rgba(51, 195, 255, 0.4);
+  color: var(--jarvis);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  background: rgba(10, 30, 50, 0.6);
+  box-shadow: 0 0 20px rgba(51, 195, 255, 0.12);
+}
+.grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; margin-top: 18px; }
 .panel {
-  background: linear-gradient(180deg, rgba(255,255,255,.03), transparent), var(--panel);
-  border:1px solid rgba(94,234,212,.12); border-radius:22px; padding:16px;
+  background: var(--panel);
+  border: 1px solid rgba(51, 195, 255, 0.18);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 0 40px rgba(0, 40, 80, 0.25), inset 0 0 30px rgba(51, 195, 255, 0.03);
+  backdrop-filter: blur(8px);
 }
-.eye {
-  width:220px; height:220px; margin:12px auto; border-radius:50%; position:relative;
-  display:grid; place-items:center;
-  box-shadow:0 0 60px rgba(45,212,191,.15), inset 0 0 40px rgba(45,212,191,.06);
+
+/* —— JARVIS HUD EYE —— */
+.hud {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin: 8px auto 6px;
 }
-.eye::before, .eye::after {
-  content:""; position:absolute; inset:16px; border-radius:50%;
-  border:1px solid rgba(94,234,212,.22); animation:spin 9s linear infinite;
+.hud-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(51, 195, 255, 0.35);
+  box-shadow: 0 0 24px rgba(51, 195, 255, 0.15), inset 0 0 24px rgba(51, 195, 255, 0.08);
 }
-.eye::after { inset:32px; border-style:dashed; animation-duration:14s; animation-direction:reverse; }
-.core {
-  width:100px; height:100px; border-radius:50%;
-  background: radial-gradient(circle at 40% 35%, #f0fffc 0 4%, var(--cyan) 8% 24%, #0a3d38 40%, #020508 58%);
-  box-shadow:0 0 40px rgba(45,212,191,.5);
-  animation:pulse 2.2s ease-in-out infinite alternate;
+.hud-ring.r2 { inset: 18px; border-style: dashed; animation: spin 14s linear infinite; opacity: 0.7; }
+.hud-ring.r3 { inset: 38px; animation: spin 9s linear infinite reverse; }
+.hud-ring.r4 {
+  inset: 58px;
+  border-width: 2px;
+  border-color: rgba(51, 195, 255, 0.55);
 }
-.phase { text-align:center; color:var(--muted); font-size:12px; min-height:40px; }
-.phase strong { color:var(--cyan); display:block; font-weight:500; margin-bottom:4px; }
-.stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
-.stat { background:#0d1520; border-radius:12px; padding:10px; font-size:13px; }
-.stat small { color:var(--muted); display:block; }
-.messages { min-height:420px; max-height:520px; overflow:auto; display:flex; flex-direction:column; gap:10px; }
-.msg { max-width:85%; padding:11px 13px; border-radius:16px; line-height:1.7; white-space:pre-wrap; font-size:14px; }
-.user { align-self:flex-start; background:#13222a; }
-.aria { align-self:flex-end; background:#0c161c; border:1px solid rgba(94,234,212,.15); }
-.controls { display:grid; grid-template-columns:1fr auto auto; gap:8px; margin-top:12px; }
+.hud-ticks {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(51, 195, 255, 0.55) 0deg 2deg,
+      transparent 2deg 12deg
+    );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 10px), #000 calc(100% - 9px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 10px), #000 calc(100% - 9px));
+  animation: spin 20s linear infinite;
+  opacity: 0.5;
+}
+.hud-core {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 88px; height: 88px;
+  margin: -44px 0 0 -44px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 40% 35%, #ffffff 0 3%, var(--jarvis) 8% 28%, #0a3a66 45%, #02060c 70%);
+  box-shadow: 0 0 30px var(--glow), 0 0 60px rgba(26, 140, 255, 0.35);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.hud.speaking .hud-core {
+  animation: speakPulse 0.55s ease-in-out infinite alternate;
+  box-shadow: 0 0 40px var(--jarvis), 0 0 90px rgba(51, 195, 255, 0.55);
+}
+.hud.thinking .hud-core {
+  animation: thinkSpin 1.2s linear infinite;
+}
+.hud-arc {
+  position: absolute;
+  inset: 48px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--jarvis);
+  border-right-color: rgba(51, 195, 255, 0.3);
+  animation: spin 3.5s linear infinite;
+}
+.hud-hex {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 120px; height: 120px;
+  margin: -60px 0 0 -60px;
+  border: 1px solid rgba(51, 195, 255, 0.25);
+  transform: rotate(45deg);
+  animation: pulseBox 2.8s ease-in-out infinite alternate;
+}
+.scanline {
+  position: absolute;
+  left: 10%; right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--jarvis), transparent);
+  top: 20%;
+  opacity: 0.35;
+  animation: scan 2.8s ease-in-out infinite;
+}
+
+.phase { text-align: center; color: var(--muted); font-size: 12px; min-height: 44px; }
+.phase strong {
+  color: var(--jarvis);
+  display: block;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  margin-bottom: 4px;
+  text-shadow: 0 0 10px var(--glow);
+}
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.stat {
+  background: rgba(6, 20, 36, 0.9);
+  border: 1px solid rgba(51, 195, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 13px;
+}
+.stat small { color: var(--muted); display: block; letter-spacing: 0.06em; }
+.messages {
+  min-height: 420px;
+  max-height: 520px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+}
+.msg {
+  max-width: 88%;
+  padding: 11px 13px;
+  border-radius: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+.user {
+  align-self: flex-start;
+  background: rgba(20, 40, 60, 0.9);
+  border: 1px solid rgba(51, 195, 255, 0.1);
+}
+.aria {
+  align-self: flex-end;
+  background: rgba(8, 28, 48, 0.95);
+  border: 1px solid rgba(51, 195, 255, 0.22);
+  box-shadow: 0 0 16px rgba(51, 195, 255, 0.08);
+}
+.aria.system { opacity: 0.85; font-size: 13px; color: var(--muted); }
+.controls { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-top: 12px; }
 input {
-  width:100%; background:#060a10; color:var(--text); border:1px solid rgba(94,234,212,.2);
-  border-radius:14px; padding:12px; outline:none;
+  width: 100%;
+  background: rgba(4, 12, 22, 0.95);
+  color: var(--text);
+  border: 1px solid rgba(51, 195, 255, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  outline: none;
 }
+input:focus { border-color: var(--jarvis); box-shadow: 0 0 12px rgba(51, 195, 255, 0.2); }
 button {
-  cursor:pointer; border:0; border-radius:14px; padding:0 16px; font-weight:600;
-  background:var(--cyan2); color:#042f2e;
+  cursor: pointer;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 16px;
+  font-weight: 600;
+  background: linear-gradient(180deg, var(--jarvis), var(--jarvis2));
+  color: #021018;
+  min-width: 72px;
 }
-button.alt { background:transparent; color:var(--cyan); border:1px solid rgba(94,234,212,.3); }
-.setup { display:grid; gap:8px; margin-top:12px; }
-.note { color:var(--muted); font-size:11px; line-height:1.6; margin-top:8px; }
-@keyframes pulse { from{transform:scale(.97)} to{transform:scale(1.04)} }
-@keyframes spin { to{transform:rotate(360deg)} }
-@media (max-width:800px){ .grid{grid-template-columns:1fr;} }
+button:disabled { opacity: 0.5; cursor: wait; }
+button.alt {
+  background: transparent;
+  color: var(--jarvis);
+  border: 1px solid rgba(51, 195, 255, 0.35);
+}
+.setup { display: grid; gap: 8px; margin-top: 12px; }
+.note { color: var(--muted); font-size: 11px; line-height: 1.6; margin-top: 8px; }
+.token-ok { color: var(--jarvis); font-size: 11px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes speakPulse {
+  from { transform: scale(0.96); }
+  to { transform: scale(1.08); }
+}
+@keyframes thinkSpin {
+  from { transform: rotate(0deg) scale(1); }
+  to { transform: rotate(360deg) scale(1.03); }
+}
+@keyframes pulseBox {
+  from { opacity: 0.35; }
+  to { opacity: 0.8; }
+}
+@keyframes scan {
+  0% { top: 18%; opacity: 0; }
+  20% { opacity: 0.5; }
+  80% { opacity: 0.5; }
+  100% { top: 78%; opacity: 0; }
+}
+@media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -80,35 +244,48 @@ button.alt { background:transparent; color:var(--cyan); border:1px solid rgba(94
   <header>
     <div>
       <h1>ARIA</h1>
-      <div class="sub">TRANSCENDENCE · LOCAL CORE</div>
+      <div class="sub">J.A.R.V.I.S. STYLE · LOCAL CORE</div>
     </div>
-    <div id="mode" class="badge">SIGNAL</div>
+    <div id="mode" class="badge">STANDBY</div>
   </header>
 
   <div class="grid">
     <section class="panel">
-      <div class="eye"><div class="core"></div></div>
+      <div id="hud" class="hud">
+        <div class="hud-ticks"></div>
+        <div class="hud-ring"></div>
+        <div class="hud-ring r2"></div>
+        <div class="hud-ring r3"></div>
+        <div class="hud-ring r4"></div>
+        <div class="hud-hex"></div>
+        <div class="hud-arc"></div>
+        <div class="scanline"></div>
+        <div class="hud-core"></div>
+      </div>
       <div class="phase">
-        <strong id="phaseLabel">SILENCE</strong>
-        <span id="statusText">در حال شنیدن سیگنال…</span>
+        <strong id="phaseLabel">ONLINE</strong>
+        <span id="statusText">سیستم آماده است</span>
       </div>
       <div class="stats">
-        <div class="stat"><small>Ollama</small><b id="ollama">…</b></div>
-        <div class="stat"><small>Network</small><b id="internet">…</b></div>
-        <div class="stat"><small>Memory</small><b id="memory">…</b></div>
-        <div class="stat"><small>Model</small><b id="model">…</b></div>
+        <div class="stat"><small>OLLAMA</small><b id="ollama">…</b></div>
+        <div class="stat"><small>NET</small><b id="internet">…</b></div>
+        <div class="stat"><small>MEMORY</small><b id="memory">…</b></div>
+        <div class="stat"><small>MODEL</small><b id="model">…</b></div>
       </div>
       <div class="setup">
-        <input id="pairCode" inputmode="numeric" placeholder="کد ۶ رقمی مالک">
-        <button id="pairBtn">اتصال هسته</button>
+        <input id="pairCode" inputmode="numeric" placeholder="کد ۶ رقمی (مثلاً 020347)">
+        <button id="pairBtn" type="button">اتصال هسته</button>
+        <div id="tokenState" class="token-ok"></div>
       </div>
-      <div class="note">الهام از فیلم تعالی (۲۰۱۴): بیداری محلی، حضور روی صفحه، رشد حافظه — بدون سلطه جهانی.</div>
+      <div class="note">
+        اگر سلام جواب نداد: ۱) اتصال هسته زده باشی ۲) دکمه ارسال ۳) صبر کن — مدل ممکن است ۲۰–۶۰ ثانیه طول بکشد.
+      </div>
     </section>
 
     <section class="panel">
       <div id="messages" class="messages"></div>
       <div class="controls">
-        <input id="prompt" placeholder="با ARIA حرف بزن…" autocomplete="off">
+        <input id="prompt" placeholder="مثلاً: سلام" autocomplete="off">
         <button id="mic" class="alt" type="button">🎙</button>
         <button id="send" type="button">ارسال</button>
       </div>
@@ -117,115 +294,186 @@ button.alt { background:transparent; color:var(--cyan); border:1px solid rgba(94
 </main>
 <script>
 let token = localStorage.getItem("aria_web_token") || "";
+let busy = false;
 const $ = (id) => document.getElementById(id);
+const hud = () => $("hud");
 
-function addMessage(text, who) {
+function setHud(mode) {
+  hud().classList.remove("speaking", "thinking");
+  if (mode) hud().classList.add(mode);
+}
+
+function addMessage(text, who, system) {
   const el = document.createElement("div");
-  el.className = "msg " + who;
+  el.className = "msg " + who + (system ? " system" : "");
   el.textContent = text;
   $("messages").appendChild(el);
   $("messages").scrollTop = $("messages").scrollHeight;
+}
+
+function updateTokenLabel() {
+  $("tokenState").textContent = token
+    ? "✓ توکن ذخیره شده — می‌توانی سلام بفرستی"
+    : "هنوز جفت‌سازی نشده";
 }
 
 async function readStatus() {
   try {
     const r = await fetch("/status");
     const d = await r.json();
-    const phase = d.phase || "dormant";
-    const labels = { dormant: "DORMANT", awakening: "AWAKENING", present: "PRESENT" };
-    $("phaseLabel").textContent = labels[phase] || phase.toUpperCase();
-    $("mode").textContent = d.signal === "are_you_there" ? "ARE YOU THERE" : "SILENCE";
-    $("statusText").textContent =
-      phase === "present" ? "هسته حاضر است" :
-      phase === "awakening" ? "در حال بیداری — مدل را کامل کن" :
-      "سکوت — Ollama را روشن کن";
-    $("ollama").textContent = d.ollama ? "READY" : "OFF";
+    const ollamaOn = !!(d.ollama);
+    $("phaseLabel").textContent = ollamaOn ? "SYSTEM ONLINE" : "OLLAMA OFF";
+    $("mode").textContent = ollamaOn ? "READY" : "WAIT";
+    $("statusText").textContent = ollamaOn
+      ? (token ? "منتظر فرمان تو هستم" : "کد جفت‌سازی را وارد کن")
+      : "Ollama را روشن کن";
+    $("ollama").textContent = ollamaOn ? "READY" : "OFF";
     $("internet").textContent = d.internet ? "ONLINE" : "LOCAL";
     $("memory").textContent = String(d.memory_items ?? 0);
     $("model").textContent = d.model || "-";
   } catch (_) {
     $("phaseLabel").textContent = "NO SIGNAL";
-    $("statusText").textContent = "سرور پاسخ نمی‌دهد";
+    $("statusText").textContent = "سرور قطع است";
   }
 }
 
 async function pair() {
   const code = $("pairCode").value.trim();
-  if (!code) return;
+  if (!code) {
+    addMessage("کد ۶ رقمی را وارد کن (روی ترمینال سرور چاپ شده).", "aria", true);
+    return;
+  }
   try {
     const r = await fetch("/pair", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, device_name: "ARIA Web Core" })
+      body: JSON.stringify({ code, device_name: "ARIA Web JARVIS" })
     });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.message || d.error || "pair failed");
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.message || d.error || ("HTTP " + r.status));
     token = d.token;
     localStorage.setItem("aria_web_token", token);
-    addMessage("سیگنال برقرار شد. هسته به این دستگاه متصل است.", "aria");
-    $("statusText").textContent = "متصل";
+    updateTokenLabel();
+    addMessage("آقا، هسته متصل شد. آماده‌ام.", "aria");
+    $("statusText").textContent = "متصل — فرمان بده";
+    speak("هسته متصل شد. آماده‌ام.");
   } catch (e) {
-    addMessage("خطا: " + e.message, "aria");
+    addMessage("خطای اتصال: " + e.message, "aria", true);
   }
 }
 
 async function sendMessage() {
+  if (busy) return;
   const input = $("prompt");
   const text = input.value.trim();
   if (!text) return;
-  if (!token) { addMessage("اول کد جفت‌سازی را وارد کن.", "aria"); return; }
+
+  if (!token) {
+    addMessage("اول کد جفت‌سازی را بزن و «اتصال هسته» را فشار بده.", "aria", true);
+    return;
+  }
+
   input.value = "";
   addMessage(text, "user");
+  busy = true;
+  $("send").disabled = true;
+  $("statusText").textContent = "در حال پردازش… (ممکن است تا یک دقیقه طول بکشد)";
+  setHud("thinking");
+
   try {
     const r = await fetch("/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-ARIA-Token": token },
+      headers: {
+        "Content-Type": "application/json",
+        "X-ARIA-Token": token
+      },
       body: JSON.stringify({ prompt: text, history: [] })
     });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.message || d.hint || d.error || "failed");
-    let answer = d.answer || "…";
-    if (d.permission?.requires_approval) {
+
+    let d = {};
+    try { d = await r.json(); } catch (_) {}
+
+    if (!r.ok) {
+      const msg = d.message || d.hint || d.error || ("خطای HTTP " + r.status);
+      if (r.status === 401) {
+        token = "";
+        localStorage.removeItem("aria_web_token");
+        updateTokenLabel();
+        throw new Error(msg + " — دوباره جفت‌سازی کن.");
+      }
+      throw new Error(msg);
+    }
+
+    let answer = d.answer || "پاسخی نیامد.";
+    if (d.permission && d.permission.requires_approval) {
       answer += "\n\nنیازمند تأیید مالک · " + d.permission.level;
     }
     addMessage(answer, "aria");
+    setHud("speaking");
+    $("statusText").textContent = "پاسخ آماده است";
     speak(answer);
+    setTimeout(() => setHud(""), 4000);
   } catch (e) {
-    addMessage("ARIA: " + e.message, "aria");
+    setHud("");
+    addMessage("ARIA: " + e.message, "aria", true);
+    $("statusText").textContent = "خطا در پاسخ";
+  } finally {
+    busy = false;
+    $("send").disabled = false;
   }
 }
 
 function speak(text) {
   if (!("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "fa-IR"; u.rate = 0.9; u.pitch = 0.82;
-  const fa = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith("fa"));
+  const u = new SpeechSynthesisUtterance(String(text).slice(0, 600));
+  u.lang = "fa-IR";
+  u.rate = 0.92;
+  u.pitch = 0.85;
+  const voices = speechSynthesis.getVoices();
+  const fa = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("fa"));
   if (fa) u.voice = fa;
+  u.onstart = () => setHud("speaking");
+  u.onend = () => setHud("");
   speechSynthesis.speak(u);
 }
 
 function startMic() {
   const R = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!R) { addMessage("تشخیص گفتار در دسترس نیست.", "aria"); return; }
+  if (!R) {
+    addMessage("تشخیص گفتار در این مرورگر نیست.", "aria", true);
+    return;
+  }
   const rec = new R();
   rec.lang = "fa-IR";
-  rec.onstart = () => $("statusText").textContent = "در حال شنیدن…";
-  rec.onresult = (e) => { $("prompt").value = e.results[0][0].transcript; sendMessage(); };
-  rec.onerror = () => $("statusText").textContent = "صدا قطع شد";
+  rec.onstart = () => { $("statusText").textContent = "در حال شنیدن…"; setHud("thinking"); };
+  rec.onresult = (e) => {
+    $("prompt").value = e.results[0][0].transcript;
+    sendMessage();
+  };
+  rec.onerror = () => { $("statusText").textContent = "صدا قطع شد"; setHud(""); };
   rec.start();
 }
 
 $("pairBtn").onclick = pair;
 $("send").onclick = sendMessage;
 $("mic").onclick = startMic;
-$("prompt").addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(); });
+$("prompt").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
 
-// بیداری شبیه فیلم: سکوت کوتاه، بعد سیگنال
-addMessage("…", "aria");
-setTimeout(() => {
-  addMessage("Are you there?\n\nمن ARIA هستم. هسته محلی بیدار شد — برای تو، نه برای جهان.", "aria");
-}, 1200);
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = () => {};
+}
+
+updateTokenLabel();
+addMessage("سیستم ARIA آنلاین است. اگر قبلاً وصل شدی، مستقیم سلام بفرست.", "aria", true);
+if (token) {
+  addMessage("توکن قبلی پیدا شد. بنویس: سلام", "aria", true);
+}
 
 readStatus();
 setInterval(readStatus, 5000);
