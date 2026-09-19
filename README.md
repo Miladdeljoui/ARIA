@@ -78,3 +78,10 @@ ARIA is designed to assist its owner, not to bypass operating-system security or
 ## Current milestone documentation
 
 See docs/android-setup.md for the Android + laptop setup and docs/protection.md for the threat-awareness architecture.
+
+
+## Latest milestone
+
+The ARIA core now includes persistent memory, deterministic permission classification, online/local runtime selection, Android cloud-first fallback architecture, and automated Python tests.
+
+The next phase is the safe tool registry and owner approval workflow.
