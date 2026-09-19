@@ -1,0 +1,3 @@
+{$ARIA_DOMAIN} {
+    reverse_proxy aria:8000
+}
