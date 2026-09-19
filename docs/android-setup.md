@@ -7,7 +7,15 @@
 - Android phone with Android 8.0 or newer
 - Laptop and phone on the same Wi-Fi/LAN for this milestone
 
-The current official Android documentation lists Android Gradle Plugin 9.4.0 as stable. The Compose setup uses the Compose compiler Gradle plugin with Kotlin 2.0+ and the current Compose BOM. This project uses AGP 9.4.0, Kotlin 2.4.10, compileSdk 37 and Compose BOM 2026.09.00. citeturn898931search3turn898931search0
+The current project uses AGP 9.4.0, Kotlin 2.2.10, compileSdk 37 and Compose BOM 2026.09.00.
+
+## ایران: Mirror
+
+For dependency/download problems caused by network restrictions, keep Liara Mirrors as an available fallback/reference:
+
+https://liara.ir/mirrors/
+
+A mirror does not guarantee that every dependency or service will be available. Use it only when the required artifact is legally and officially mirrored.
 
 ## Laptop
 
@@ -25,7 +33,7 @@ Do not publish aria_state.json. It is ignored by Git.
 
 Open the android folder as an existing Android Studio project.
 
-Use JDK 17 for the Gradle toolchain with the AGP version used here. citeturn898931search3
+Use JDK 17 for the Gradle toolchain.
 
 Build and install the app on the phone.
 
