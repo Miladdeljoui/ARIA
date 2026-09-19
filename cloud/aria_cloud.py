@@ -1,6 +1,5 @@
 import hashlib
 import os
-import secrets
 import sqlite3
 import time
 from contextlib import closing
@@ -15,6 +14,7 @@ APP_PORT = int(os.getenv("ARIA_PORT", "8000"))
 OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 MODEL = os.getenv("ARIA_MODEL", "qwen3:1.7b")
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
+PAIRING_CODE = os.getenv("ARIA_PAIRING_CODE", "")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
 
 app = FastAPI(title="ARIA Cloud", version="0.2.0")
@@ -69,22 +69,22 @@ def sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def ensure_pair_code() -> str:
+def ensure_pair_code() -> None:
+    if not PAIRING_CODE or len(PAIRING_CODE) < 6:
+        raise RuntimeError(
+            "ARIA_PAIRING_CODE must be set to a secret value with at least 6 characters"
+        )
+
     with closing(db()) as connection:
-        row = connection.execute(
-            "SELECT value FROM settings WHERE key = 'pairing_code'"
-        ).fetchone()
-
-        if row:
-            return row[0]
-
-        code = f"{secrets.randbelow(1_000_000):06d}"
         connection.execute(
-            "INSERT INTO settings(key, value) VALUES('pairing_code', ?)",
-            (sha256(code),),
+            """
+            INSERT INTO settings(key, value)
+            VALUES('pairing_code', ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """,
+            (sha256(PAIRING_CODE),),
         )
         connection.commit()
-        return code
 
 
 def device_id_from_token(token: str) -> int | None:
@@ -154,7 +154,7 @@ def pair(request: PairRequest):
         if not row or sha256(request.code.strip()) != row[0]:
             raise HTTPException(status_code=401, detail="invalid_pairing_code")
 
-        token = secrets.token_urlsafe(32)
+        token = __import__("secrets").token_urlsafe(32)
         connection.execute(
             """
             INSERT INTO devices(device_name, token_hash, created_at)
