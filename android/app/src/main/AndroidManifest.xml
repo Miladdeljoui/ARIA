@@ -6,6 +6,7 @@
         android:allowBackup="true"
         android:label="ARIA"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.ARIA">
         <activity
             android:name=".MainActivity"
