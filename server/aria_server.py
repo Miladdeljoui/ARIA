@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import secrets
-import socket
+import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -10,15 +10,25 @@ from threading import Lock
 
 import requests
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from core.memory import MemoryStore
+from core.permissions import classify_request
+from core.runtime import internet_available
+
 HOST = os.getenv("ARIA_HOST", "0.0.0.0")
 PORT = int(os.getenv("ARIA_PORT", "8765"))
 OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 OLLAMA_TAGS_URL = os.getenv("ARIA_OLLAMA_TAGS_URL", "http://127.0.0.1:11434/api/tags")
 MODEL = os.getenv("ARIA_MODEL", "qwen3:1.7b")
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
-STATE_FILE = Path(os.getenv("ARIA_STATE_FILE", "aria_state.json"))
+STATE_FILE = Path(os.getenv("ARIA_STATE_FILE", str(ROOT / "aria_state.json")))
+MEMORY_DB = Path(os.getenv("ARIA_MEMORY_DB", str(ROOT / "aria_memory.db")))
 
-STATE_LOCK = Lock()
+LOCK = Lock()
+MEMORY = MemoryStore(str(MEMORY_DB))
 
 
 def sha256(value: str) -> str:
@@ -26,7 +36,7 @@ def sha256(value: str) -> str:
 
 
 def load_state() -> dict:
-    with STATE_LOCK:
+    with LOCK:
         if not STATE_FILE.exists():
             return {}
         try:
@@ -36,7 +46,7 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
-    with STATE_LOCK:
+    with LOCK:
         STATE_FILE.write_text(
             json.dumps(state, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -45,41 +55,274 @@ def save_state(state: dict) -> None:
 
 def ensure_state() -> dict:
     state = load_state()
-    changed = False
-
     if "pairing_code_hash" not in state:
-        pairing_code = f"{secrets.randbelow(1_000_000):06d}"
-        state["pairing_code_hash"] = sha256(pairing_code)
-        state["pairing_code_display"] = pairing_code
-        state["created_at"] = int(time.time())
-        state["owner_name"] = OWNER_NAME
-        state["devices"] = []
-        changed = True
-
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        state = {
+            "pairing_code_hash": sha256(code),
+            "pairing_code_display": code,
+            "created_at": int(time.time()),
+            "owner_name": OWNER_NAME,
+            "devices": [],
+        }
+        save_state(state)
     state.setdefault("owner_name", OWNER_NAME)
     state.setdefault("devices", [])
-
-    if changed:
-        save_state(state)
-
     return state
 
 
 def ollama_available() -> bool:
     try:
-        response = requests.get(OLLAMA_TAGS_URL, timeout=3)
-        return response.ok
+        return requests.get(OLLAMA_TAGS_URL, timeout=3).ok
     except requests.RequestException:
         return False
 
 
-def internet_available(timeout: float = 2.0) -> bool:
+def ask_local(prompt: str) -> tuple[str, dict]:
+    decision = classify_request(prompt)
+    memories = MEMORY.search(prompt, limit=5)
+    recent = MEMORY.recent_conversation(limit=12)
+
+    memory_text = "\n".join(
+        f"- {item['content']}" for item in memories
+    ) or "- مورد مرتبطی در حافظه پیدا نشد."
+
+    recent_text = "\n".join(
+        f"{item['role']}: {item['content']}" for item in recent
+    )
+
+    system = (
+        f"تو ARIA هستی، دستیار شخصی {OWNER_NAME} و پروژه‌ای که او ساخته است. "
+        "فارسی پاسخ بده مگر اینکه کاربر زبان دیگری بخواهد. "
+        "برای کارهای حساس، مالی، مخرب یا تغییرات واقعی بدون تأیید مالک اقدام نکن. "
+        "در این نسخه ابزار اجرایی فعال نیست. "
+        "اگر اقدامی نیاز به مجوز دارد، واضح اعلام کن و ادعا نکن که انجام شده است.\n\n"
+        f"سطح مجوز: {decision.level.value}\n"
+        f"دلیل: {decision.reason}\n\n"
+        f"حافظه مرتبط:\n{memory_text}\n\n"
+        f"گفت‌وگوی اخیر:\n{recent_text}"
+    )
+
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+        },
+        timeout=120,
+    )
+    response.raise_for_status()
+
+    return response.json()["message"]["content"], {
+        "level": decision.level.value,
+        "requires_approval": decision.requires_approval,
+        "reason": decision.reason,
+    }
+
+
+def send_json(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+class ARIAHandler(BaseHTTPRequestHandler):
+    server_version = "ARIA/0.4"
+
+    def log_message(self, format: str, *args) -> None:
+        print(f"[HTTP] {self.address_string()} - {format % args}")
+
+    def read_json(self) -> dict:
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length)
+        return json.loads(raw.decode("utf-8")) if raw else {}
+
+    def authorized(self) -> bool:
+        token = self.headers.get("X-ARIA-Token", "")
+        if not token:
+            return False
+        state = load_state()
+        token_hash = sha256(token)
+        return any(
+            device.get("token_hash") == token_hash
+            for device in state.get("devices", [])
+        )
+
+    def do_GET(self) -> None:
+        if self.path == "/status":
+            state = load_state()
+            send_json(
+                self,
+                200,
+                {
+                    "assistant": "ARIA",
+                    "owner": state.get("owner_name", OWNER_NAME),
+                    "model": MODEL,
+                    "ollama": ollama_available(),
+                    "internet": internet_available(),
+                    "memory_items": len(MEMORY.search("", 100000)),
+                    "server_time": int(time.time()),
+                },
+            )
+            return
+
+        if self.path == "/memory":
+            if not self.authorized():
+                send_json(self, 401, {"error": "unauthorized"})
+                return
+            send_json(self, 200, {"memories": MEMORY.search("", 100)})
+            return
+
+        send_json(self, 404, {"error": "not_found"})
+
+    def do_POST(self) -> None:
+        if self.path == "/pair":
+            try:
+                data = self.read_json()
+            except (ValueError, json.JSONDecodeError):
+                send_json(self, 400, {"error": "invalid_json"})
+                return
+
+            state = ensure_state()
+            code = str(data.get("code", "")).strip()
+            if sha256(code) != state.get("pairing_code_hash"):
+                send_json(self, 401, {"error": "invalid_pairing_code"})
+                return
+
+            token = secrets.token_urlsafe(32)
+            device_name = str(data.get("device_name", "Android")).strip()[:80] or "Android"
+            state.setdefault("devices", []).append(
+                {
+                    "device_name": device_name,
+                    "token_hash": sha256(token),
+                    "paired_at": int(time.time()),
+                }
+            )
+            save_state(state)
+
+            send_json(
+                self,
+                200,
+                {"assistant": "ARIA", "owner": OWNER_NAME, "token": token},
+            )
+            return
+
+        if self.path == "/memory/add":
+            if not self.authorized():
+                send_json(self, 401, {"error": "unauthorized"})
+                return
+
+            try:
+                data = self.read_json()
+            except (ValueError, json.JSONDecodeError):
+                send_json(self, 400, {"error": "invalid_json"})
+                return
+
+            content = str(data.get("content", "")).strip()
+            kind = str(data.get("kind", "note")).strip()[:40] or "note"
+            if not content:
+                send_json(self, 400, {"error": "content_required"})
+                return
+
+            memory_id = MEMORY.add_memory(content, kind=kind, source="owner")
+            send_json(self, 200, {"saved": True, "memory_id": memory_id})
+            return
+
+        if self.path == "/chat":
+            if not self.authorized():
+                send_json(self, 401, {"error": "unauthorized"})
+                return
+
+            try:
+                data = self.read_json()
+            except (ValueError, json.JSONDecodeError):
+                send_json(self, 400, {"error": "invalid_json"})
+                return
+
+            prompt = str(data.get("prompt", "")).strip()
+            if not prompt:
+                send_json(self, 400, {"error": "prompt_required"})
+                return
+
+            if not ollama_available():
+                send_json(
+                    self,
+                    503,
+                    {
+                        "error": "ollama_unavailable",
+                        "internet": internet_available(),
+                    },
+                )
+                return
+
+            try:
+                answer, permission = ask_local(prompt)
+            except requests.RequestException as exc:
+                send_json(
+                    self,
+                    503,
+                    {"error": "ollama_request_failed", "detail": str(exc)},
+                )
+                return
+
+            MEMORY.add_conversation("user", prompt)
+            MEMORY.add_conversation("assistant", answer)
+
+            send_json(
+                self,
+                200,
+                {
+                    "answer": answer,
+                    "model": MODEL,
+                    "permission": permission,
+                    "offline_capable": True,
+                },
+            )
+            return
+
+        send_json(self, 404, {"error": "not_found"})
+
+
+def local_ip() -> str:
     try:
-        sock = socket.create_connection(("1.1.1.1", 53), timeout=timeout)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        address = sock.getsockname()[0]
         sock.close()
-        return True
+        return address
     except OSError:
-        return False
+        return "127.0.0.1"
 
 
-def ask_local(prompt: str) -> tuple[str, dict]:\n    decision = classify_request(prompt)\n    memories = MEMORY.search(prompt, limit=5)\n    recent = MEMORY.recent_conversation(limit=12)\n\n    memory_text = "\n".join(\n        f"- {item['content']}" for item in memories\n    ) or "- مورد مرتبطی در حافظه پیدا نشد."\n\n    context_text = "\n".join(\n        f"{item['role']}: {item['content']}" for item in recent\n    )\n\n    system = (\n        f"تو ARIA هستی، دستیار شخصی {OWNER_NAME} و پروژه‌ای که او ساخته است. "\n        "فارسی پاسخ بده مگر اینکه کاربر زبان دیگری بخواهد. "\n        "برای کارهای حساس، مالی، مخرب یا تغییرات واقعی، بدون تأیید مالک اقدام نکن. "\n        "در این نسخه ابزار اجرایی فعال نیست و فقط پاسخ متنی و تحلیل ارائه می‌کنی.\n\n"\n        f"سطح مجوز درخواست فعلی: {decision.level.value}. "\n        f"دلیل: {decision.reason}\n\n"\n        "حافظه مرتبط:\n"\n        f"{memory_text}\n\n"\n        "گفت‌وگوی اخیر:\n"\n        f"{context_text}"\n    )\n\n    response = requests.post(\n        OLLAMA_URL,\n        json={\n            "model": MODEL,\n            "messages": [\n                {"role": "system", "content": system},\n                {"role": "user", "content": prompt},\n            ],\n            "stream": False,\n        },\n        timeout=120,\n    )\n    response.raise_for_status()\n\n    answer = response.json()["message"]["content"]\n    return answer, {\n        "level": decision.level.value,\n        "requires_approval": decision.requires_approval,\n        "reason": decision.reason,\n    }
+def main() -> None:
+    state = ensure_state()
+    print("=" * 56)
+    print("ARIA | Local-first personal AI")
+    print("=" * 56)
+    print(f"Owner: {state.get('owner_name', OWNER_NAME)}")
+    print(f"Model: {MODEL}")
+    print(f"Server: http://{local_ip()}:{PORT}")
+    print(f"Android pairing code: {state['pairing_code_display']}")
+    print(f"Ollama: {'OK' if ollama_available() else 'NOT READY'}")
+    print(f"Internet: {'ONLINE' if internet_available() else 'OFFLINE'}")
+    print(f"Memory DB: {MEMORY_DB}")
+    print("=" * 56)
+    print("برای توقف سرور: Ctrl+C")
+
+    server = ThreadingHTTPServer((HOST, PORT), ARIAHandler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nARIA server stopped.")
+    finally:
+        server.server_close()
+
+
+if __name__ == "__main__":
+    main()
