@@ -261,10 +261,8 @@ fun AriaApp() {
             }
             OutlinedButton(
                 onClick = {
-                    status = "Cloud: " +
-                        if (cloudToken.isBlank()) "جفت نشده" else "متصل" +
-                        " | Laptop: " +
-                        if (localToken.isBlank()) "جفت نشده" else "متصل"
+                    status = "Cloud: " + (if (cloudToken.isBlank()) "جفت نشده" else "متصل") +
+                        " | Laptop: " + (if (localToken.isBlank()) "جفت نشده" else "متصل")
                 }
             ) {
                 Text("وضعیت")
