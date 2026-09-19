@@ -30,6 +30,7 @@ MEMORY_DB = Path(os.getenv("ARIA_MEMORY_DB", str(ROOT / "aria_memory.db")))
 
 LOCK = Lock()
 MEMORY = MemoryStore(str(MEMORY_DB))
+WEB_ROOT = ROOT / "web"
 
 
 def sha256(value: str) -> str:
@@ -156,6 +157,19 @@ class ARIAHandler(BaseHTTPRequestHandler):
         )
 
     def do_GET(self) -> None:
+        if self.path in ("/", "/index.html"):
+            index_path = WEB_ROOT / "index.html"
+            if index_path.exists():
+                body = index_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            send_json(self, 500, {"error": "web_ui_missing"})
+            return
+
         if self.path == "/status":
             state = load_state()
             send_json(
