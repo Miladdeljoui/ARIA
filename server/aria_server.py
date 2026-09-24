@@ -58,7 +58,13 @@ def sha256(value: str) -> str:
 
 
 def normalize_pairing_code(code: str) -> str:
-    return "".join(ch for ch in str(code).strip() if ch.isdigit())
+    # پشتیبانی از اعداد انگلیسی، فارسی و عربی که ممکن است از کیبورد موبایل ارسال شوند.
+    digit_map = str.maketrans(
+        "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
+        "01234567890123456789",
+    )
+    normalized = str(code).strip().translate(digit_map)
+    return "".join(ch for ch in normalized if ch in "0123456789")
 
 
 def load_state() -> dict:
