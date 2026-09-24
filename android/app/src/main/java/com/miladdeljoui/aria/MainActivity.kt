@@ -174,6 +174,21 @@ private fun OwnerLockScreen(
         )
     }
     var setupMode by remember { mutableStateOf(!lock.isConfigured()) }
+    var pinVerified by remember { mutableStateOf(false) }
+    var voiceVerified by remember { mutableStateOf(false) }
+
+    fun tryUnlock() {
+        if (pinVerified && voiceVerified) {
+            status = "هویت مالک تأیید شد"
+            onUnlocked()
+        } else {
+            val missing = buildList {
+                if (!pinVerified) add("رمز")
+                if (!voiceVerified) add("صدا")
+            }.joinToString(" و ")
+            status = "هنوز تأیید نشده: $missing"
+        }
+    }
 
     val voiceController = remember {
         VoiceController(
@@ -185,8 +200,9 @@ private fun OwnerLockScreen(
                         status = "عبارت صوتی شنیده شد. تأیید کن."
                     } else {
                         if (lock.unlockWithVoice(spoken)) {
+                            voiceVerified = true
                             status = "صدا تأیید شد"
-                            onUnlocked()
+                            tryUnlock()
                         } else {
                             status = "عبارت صوتی اشتباه است"
                         }
@@ -281,7 +297,9 @@ private fun OwnerLockScreen(
             Button(
                 onClick = {
                     if (lock.unlockWithPin(pin)) {
-                        onUnlocked()
+                        pinVerified = true
+                        status = "رمز تأیید شد"
+                        tryUnlock()
                     } else {
                         status = "رمز اشتباه است"
                     }
