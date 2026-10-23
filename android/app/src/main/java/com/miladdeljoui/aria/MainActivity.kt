@@ -72,15 +72,8 @@ import kotlin.math.sin
 private data class ChatItem(val owner: Boolean, val text: String)
 
 // پالت نزدیک به حس شیشه‌ای / فیروزه‌ای فیلم (الهام بصری، نه کپی)
-private val AriaCyan = Color(0xFF5EEAD4)
 private val AriaCyanDim = Color(0xFF2DD4BF)
-private val AriaCyanSoft = Color(0x335EEAD4)
 private val AriaGlass = Color(0x22A7F3D0)
-private val AriaBackground = Color(0xFF070B12)
-private val AriaPanel = Color(0xFF0F1623)
-private val AriaPanelSoft = Color(0xFF162033)
-private val AriaText = Color(0xFFE8F7F4)
-private val AriaMuted = Color(0xFF7A9E98)
 
 class MainActivity : ComponentActivity() {
     private val askPermission = registerForActivityResult(
