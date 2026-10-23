@@ -128,212 +128,104 @@ private fun AriaRoot(
     requestMicPermission: () -> Unit
 ) {
     val context = LocalContext.current
-    val lock = remember { OwnerLock(context) }
-    var unlocked by remember { mutableStateOf(false) }
+    val prefs = remember {
+        context.getSharedPreferences("aria_profile", Context.MODE_PRIVATE)
+    }
+    var signedIn by remember { mutableStateOf(prefs.getBoolean("guest_ready", false)) }
 
-    if (!unlocked) {
-        OwnerLockScreen(
-            lock = lock,
-            voiceStatus = voiceStatus.value,
-            requestMicPermission = requestMicPermission,
-            onUnlocked = { unlocked = true },
-            onVoiceState = { voiceStatus.value = it }
+    if (!signedIn) {
+        GuestSignInScreen(
+            initialName = prefs.getString("name", "") ?: "",
+            initialPhone = prefs.getString("phone", "") ?: "",
+            onContinue = { name, phone ->
+                prefs.edit()
+                    .putString("name", name.trim())
+                    .putString("phone", phone.trim())
+                    .putBoolean("guest_ready", true)
+                    .apply()
+                signedIn = true
+            }
         )
     } else {
         AriaApp(
             voiceStatus = voiceStatus.value,
             requestMicPermission = requestMicPermission,
-            onVoiceState = { voiceStatus.value = it },
-            onLock = { unlocked = false }
+            onVoiceState = { voiceStatus.value = it }
         )
     }
 }
 
 @Composable
-private fun OwnerLockScreen(
-    lock: OwnerLock,
-    voiceStatus: String,
-    requestMicPermission: () -> Unit,
-    onUnlocked: () -> Unit,
-    onVoiceState: (String) -> Unit
+private fun GuestSignInScreen(
+    initialName: String,
+    initialPhone: String,
+    onContinue: (String, String) -> Unit
 ) {
-    val context = LocalContext.current
-    val uiHandler = remember { Handler(Looper.getMainLooper()) }
-    var pin by remember { mutableStateOf("") }
-    var phrase by remember { mutableStateOf("") }
-    var confirmPhrase by remember { mutableStateOf("") }
-    var status by remember {
-        mutableStateOf(
-            if (lock.isConfigured()) "هویت مالک را تأیید کن"
-            else "اولین بار: رمز و عبارت صوتی خودت را بساز"
-        )
-    }
-    var setupMode by remember { mutableStateOf(!lock.isConfigured()) }
-    var pinVerified by remember { mutableStateOf(false) }
-    var voiceVerified by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf(initialName) }
+    var phone by remember { mutableStateOf(initialPhone) }
+    var error by remember { mutableStateOf("") }
 
-    fun tryUnlock() {
-        if (pinVerified && voiceVerified) {
-            status = "هویت مالک تأیید شد"
-            onUnlocked()
-        } else {
-            val missing = buildList {
-                if (!pinVerified) add("رمز")
-                if (!voiceVerified) add("صدا")
-            }.joinToString(" و ")
-            status = "هنوز تأیید نشده: $missing"
-        }
-    }
-
-    val voiceController = remember {
-        VoiceController(
-            context = context,
-            onText = { spoken ->
-                uiHandler.post {
-                    if (setupMode) {
-                        phrase = spoken
-                        status = "عبارت صوتی شنیده شد. تأیید کن."
-                    } else {
-                        if (lock.unlockWithVoice(spoken)) {
-                            voiceVerified = true
-                            status = "صدا تأیید شد"
-                            tryUnlock()
-                        } else {
-                            status = "عبارت صوتی اشتباه است"
-                        }
-                    }
-                }
-            },
-            onState = { s -> uiHandler.post { onVoiceState(s) } }
-        )
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { voiceController.destroy() }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(AriaBackground, Color(0xFF0A1520), AriaBackground)
-                )
-            )
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Box(
+        modifier = Modifier.fillMaxSize().background(
+            Brush.verticalGradient(listOf(Color(0xFF10172A), Color(0xFF07101B)))
+        ),
+        contentAlignment = Alignment.Center
     ) {
-        Spacer(Modifier.height(24.dp))
-        AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
-        Text(
-            "ARIA",
-            color = AriaCyan,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Light
-        )
-        Text(
-            if (setupMode) "راه‌اندازی هویت مالک" else "قفل هسته",
-            color = AriaMuted,
-            style = MaterialTheme.typography.labelMedium
-        )
-        Text(status, color = AriaText, style = MaterialTheme.typography.bodySmall)
-        Text(voiceStatus, color = AriaMuted, style = MaterialTheme.typography.labelSmall)
-
-        OutlinedTextField(
-            value = pin,
-            onValueChange = { pin = it.take(12) },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(if (setupMode) "رمز جدید (حداقل ۴)" else "رمز مالک") },
-            visualTransformation = PasswordVisualTransformation()
-        )
-
-        if (setupMode) {
-            OutlinedTextField(
-                value = phrase,
-                onValueChange = { phrase = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("عبارت صوتی (یا با میکروفون بگو)") },
-                placeholder = { Text("مثلاً: آریا بیدار شو") }
-            )
-            OutlinedTextField(
-                value = confirmPhrase,
-                onValueChange = { confirmPhrase = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("تأیید عبارت صوتی") }
-            )
-            Button(
-                onClick = {
-                    val p = if (phrase.isNotBlank()) phrase else confirmPhrase
-                    if (p.isBlank()) {
-                        status = "عبارت صوتی لازم است"
-                        return@Button
-                    }
-                    if (confirmPhrase.isNotBlank() && normalizeSimple(phrase) != normalizeSimple(confirmPhrase)) {
-                        status = "عبارت و تأیید یکی نیستند"
-                        return@Button
-                    }
-                    if (lock.setup(pin, p)) {
-                        status = "قفل ذخیره شد"
-                        setupMode = false
-                        pin = ""
-                        phrase = ""
-                        confirmPhrase = ""
-                    } else {
-                        status = "رمز حداقل ۴ کاراکتر و عبارت حداقل ۳ حرف"
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = AriaCyanDim)
-            ) {
-                Text("ذخیره قفل مالک")
-            }
-        } else {
-            Button(
-                onClick = {
-                    if (lock.unlockWithPin(pin)) {
-                        pinVerified = true
-                        status = "رمز تأیید شد"
-                        tryUnlock()
-                    } else {
-                        status = "رمز اشتباه است"
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = AriaCyanDim)
-            ) {
-                Text("باز کردن با رمز")
-            }
-        }
-
-        OutlinedButton(
-            onClick = {
-                requestMicPermission()
-                voiceController.start()
-            },
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text(if (setupMode) "🎙 ضبط عبارت صوتی" else "🎙 باز کردن با صدا")
-        }
-
-        if (!setupMode) {
+            Text("ARIA", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+            Text("دستیار هوشمند شخصی تو", color = Color(0xFFB8C5D9))
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { error = "ورود گوگل هنوز راه‌اندازی نشده؛ فعلاً ورود مهمان رایگان است." },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = false
+            ) {
+                Text("ورود با حساب گوگل · به‌زودی")
+            }
+            Text("یا ورود مهمان رایگان", color = Color(0xFF7DE3D1))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it; error = "" },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("نام") },
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { phone = it; error = "" },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("شماره تلفن") },
+                singleLine = true
+            )
+            if (error.isNotBlank()) {
+                Text(error, color = Color(0xFFFFB4AB))
+            }
+            Button(
+                onClick = {
+                    if (name.trim().isBlank()) {
+                        error = "نامت را وارد کن."
+                    } else if (phone.trim().filter { it.isDigit() }.length < 7) {
+                        error = "شماره تلفن را بررسی کن."
+                    } else {
+                        onContinue(name, phone)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("ادامه به‌صورت مهمان")
+            }
             Text(
-                "عبارت صوتی: ${lock.voicePhraseHint()}",
-                color = AriaMuted,
-                style = MaterialTheme.typography.labelSmall
+                "نام و شماره فعلاً فقط روی همین گوشی ذخیره می‌شوند؛ پیامک تأیید ارسال نمی‌شود.",
+                color = Color(0xFF9BAAC0),
+                style = MaterialTheme.typography.bodySmall
             )
         }
-
-        Text(
-            "رمز و صدا فقط روی این گوشی ذخیره می‌شوند.",
-            color = AriaMuted,
-            style = MaterialTheme.typography.labelSmall
-        )
     }
 }
-
-private fun normalizeSimple(t: String): String =
-    t.trim().lowercase().replace(Regex("\\s+"), " ")
 
 @Composable
 private fun AriaApp(
