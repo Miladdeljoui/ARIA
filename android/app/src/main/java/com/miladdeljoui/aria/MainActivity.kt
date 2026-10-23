@@ -2,6 +2,8 @@ package com.miladdeljoui.aria
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
@@ -548,6 +550,39 @@ private fun AriaApp(
 
         Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
         Text(voiceStatus, color = AriaMuted, style = MaterialTheme.typography.labelSmall)
+
+        Text("اتصال جایگزین اینترنت", color = AriaCyan, style = MaterialTheme.typography.labelMedium)
+        Text(
+            "یکی از VPNهای جداگانه را نصب و وصل کن؛ ARIA خودش تونل VPN را مدیریت نمی‌کند.",
+            color = AriaMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/shirokhorshid/shirokhorshid-android/releases"))
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("شیر و خورشید") }
+            OutlinedButton(
+                onClick = {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/GFW-knocker/MahsaNG/releases/latest"))
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("مهسا") }
+        }
+        OutlinedButton(
+            onClick = {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=org.torproject.android"))
+                )
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Orbot / Tor") }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
