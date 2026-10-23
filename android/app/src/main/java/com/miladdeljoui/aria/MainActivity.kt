@@ -231,8 +231,7 @@ private fun GuestSignInScreen(
 private fun AriaApp(
     voiceStatus: String,
     requestMicPermission: () -> Unit,
-    onVoiceState: (String) -> Unit,
-    onLock: () -> Unit
+    onVoiceState: (String) -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember {
@@ -428,7 +427,6 @@ private fun AriaApp(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(onlineMode, color = AriaCyan, style = MaterialTheme.typography.labelSmall)
                 OutlinedButton(onClick = { showPackages = true }) { Text("بسته‌ها") }
-                OutlinedButton(onClick = onLock) { Text("قفل") }
             }
         }
 
