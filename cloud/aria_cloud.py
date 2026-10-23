@@ -16,6 +16,10 @@ OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 # Example endpoint: https://openrouter.ai/api/v1/chat/completions
 ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", "https://openrouter.ai/api/v1/chat/completions").strip()
 ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip()
+OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().lower()
+TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
+MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
+GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.com/repos/Miladdeljoui/ARIA/releases/latest")
 MODEL = os.getenv("ARIA_MODEL", "").strip() or ("openrouter/free" if os.getenv("ARIA_API_KEY", "").strip() else "qwen3:1.7b")
 if os.getenv("ARIA_API_KEY", "").strip() and MODEL == "qwen3:1.7b":
     MODEL = "openrouter/free"
@@ -36,6 +40,12 @@ class ChatRequest(BaseModel):
     history: list[dict] = Field(default_factory=list)
 
 
+class FeedbackRequest(BaseModel):
+    category: str = Field(default="general", min_length=1, max_length=40)
+    message: str = Field(min_length=3, max_length=4000)
+    app_version: str = Field(default="unknown", max_length=40)
+
+
 def db() -> sqlite3.Connection:
     connection = sqlite3.connect(DB_PATH)
     connection.execute(
@@ -52,6 +62,28 @@ def db() -> sqlite3.Connection:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             device_name TEXT NOT NULL,
             token_hash TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            device_id INTEGER PRIMARY KEY,
+            trial_started_at INTEGER NOT NULL,
+            paid_until INTEGER NOT NULL DEFAULT 0,
+            owner_email TEXT
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            message TEXT NOT NULL,
+            app_version TEXT NOT NULL,
             created_at INTEGER NOT NULL
         )
         """
@@ -232,6 +264,93 @@ def pair(request: PairRequest):
         "owner": OWNER_NAME,
         "token": token,
     }
+
+
+@app.get("/subscription")
+def subscription(x_aria_token: str = Header(default="")):
+    """Server-calculated trial status. Owner exemption waits for verified Google identity."""
+    device_id = device_id_from_token(x_aria_token)
+    if device_id is None:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    now = int(time.time())
+    with closing(db()) as connection:
+        device = connection.execute(
+            "SELECT created_at FROM devices WHERE id = ?", (device_id,)
+        ).fetchone()
+        connection.execute(
+            """INSERT OR IGNORE INTO subscriptions(device_id, trial_started_at, paid_until)
+               VALUES (?, ?, 0)""",
+            (device_id, int(device[0]) if device else now),
+        )
+        row = connection.execute(
+            "SELECT trial_started_at, paid_until FROM subscriptions WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        connection.commit()
+    started, paid_until = int(row[0]), int(row[1])
+    trial_end = started + TRIAL_DAYS * 86400
+    trial_active = now < trial_end
+    paid_active = now < paid_until
+    return {
+        "status": "paid" if paid_active else ("trial" if trial_active else "expired"),
+        "trial_days": TRIAL_DAYS,
+        "trial_started_at": started,
+        "trial_ends_at": trial_end,
+        "paid_until": paid_until,
+        "monthly_price_toman": MONTHLY_PRICE_TOMAN,
+        "owner_email_verification": "not_implemented",
+        "payment": "zarinpal_sandbox_not_implemented",
+        "access_granted": paid_active or trial_active,
+    }
+
+
+@app.post("/feedback")
+def submit_feedback(request: FeedbackRequest, x_aria_token: str = Header(default="")):
+    device_id = device_id_from_token(x_aria_token)
+    if device_id is None:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    category = request.category.strip().lower()
+    if category not in {"bug", "idea", "general", "other"}:
+        raise HTTPException(status_code=422, detail="invalid_feedback_category")
+    with closing(db()) as connection:
+        connection.execute(
+            """INSERT INTO feedback(device_id, category, message, app_version, created_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (device_id, category, request.message.strip(), request.app_version.strip(), int(time.time())),
+        )
+        connection.commit()
+    return {"ok": True, "message": "feedback_received"}
+
+
+@app.get("/updates/latest")
+def latest_update():
+    """Return public GitHub Release metadata; this does not install an APK."""
+    try:
+        response = requests.get(
+            GITHUB_RELEASES_URL,
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "ARIA-Android"},
+            timeout=8,
+        )
+        if response.status_code == 404:
+            return {"available": False, "reason": "no_public_release_yet"}
+        response.raise_for_status()
+        release = response.json()
+        assets = [
+            {"name": item.get("name", ""), "url": item.get("browser_download_url", "")}
+            for item in release.get("assets", [])
+            if str(item.get("name", "")).lower().endswith(".apk")
+        ]
+        return {
+            "available": bool(assets),
+            "tag": release.get("tag_name", ""),
+            "name": release.get("name", ""),
+            "published_at": release.get("published_at", ""),
+            "release_url": release.get("html_url", ""),
+            "apk_assets": assets,
+            "auto_install": False,
+        }
+    except (requests.RequestException, ValueError):
+        raise HTTPException(status_code=503, detail="update_check_unavailable")
 
 
 @app.post("/chat")
