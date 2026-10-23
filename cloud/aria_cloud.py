@@ -12,12 +12,16 @@ from pydantic import BaseModel, Field
 APP_HOST = os.getenv("ARIA_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("ARIA_PORT", "8000"))
 OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
+# Configure an OpenAI-compatible hosted inference endpoint to run ARIA without a laptop.
+# Example endpoint: https://openrouter.ai/api/v1/chat/completions
+ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", "").strip()
+ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip()
 MODEL = os.getenv("ARIA_MODEL", "qwen3:1.7b")
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
 PAIRING_CODE = os.getenv("ARIA_PAIRING_CODE", "")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
 
-app = FastAPI(title="ARIA Cloud", version="0.2.0")
+app = FastAPI(title="ARIA Cloud", version="0.3.0")
 
 
 class PairRequest(BaseModel):
@@ -88,6 +92,8 @@ def ensure_pair_code() -> None:
 
 
 def device_id_from_token(token: str) -> int | None:
+    if not token:
+        return None
     token_hash = sha256(token)
     with closing(db()) as connection:
         row = connection.execute(
@@ -97,29 +103,82 @@ def device_id_from_token(token: str) -> int | None:
         return int(row[0]) if row else None
 
 
-def ask_ollama(prompt: str, history: list[dict]) -> str:
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                f"تو ARIA هستی، دستیار شخصی {OWNER_NAME} و پروژه‌ای که او ساخته است. "
-                "فارسی پاسخ بده مگر اینکه کاربر زبان دیگری بخواهد. "
-                "هرگز ادعا نکن عملی را انجام داده‌ای مگر اینکه ابزار آن واقعاً اجرا شده باشد. "
-                "برای اقدام حساس، حذف اطلاعات، تغییر امنیت، پرداخت، انتشار یا ارتباط بیرونی "
-                "به تأیید مالک نیاز است."
-            ),
-        }
-    ]
-    messages.extend(history[-12:])
-    messages.append({"role": "user", "content": prompt})
+def system_message() -> dict:
+    return {
+        "role": "system",
+        "content": (
+            f"تو ARIA هستی، دستیار شخصی {OWNER_NAME} و پروژه‌ای که او ساخته است. "
+            "فارسی پاسخ بده مگر اینکه کاربر زبان دیگری بخواهد. "
+            "هرگز ادعا نکن عملی را انجام داده‌ای مگر اینکه ابزار آن واقعاً اجرا شده باشد. "
+            "برای اقدام حساس، حذف اطلاعات، تغییر امنیت، پرداخت، انتشار یا ارتباط بیرونی "
+            "به تأیید مالک نیاز است."
+        ),
+    }
 
+
+def chat_messages(prompt: str, history: list[dict]) -> list[dict]:
+    # Keep only valid conversational roles and string content from client history.
+    safe_history = []
+    for item in history[-12:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if role in {"user", "assistant"} and isinstance(content, str):
+            safe_history.append({"role": role, "content": content[:12000]})
+    return [system_message(), *safe_history, {"role": "user", "content": prompt}]
+
+
+def ask_hosted_api(messages: list[dict]) -> str:
+    if not ARIA_API_BASE_URL or not ARIA_API_KEY:
+        raise RuntimeError("hosted_ai_not_configured")
+    response = requests.post(
+        ARIA_API_BASE_URL,
+        headers={
+            "Authorization": f"Bearer {ARIA_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": MODEL,
+            "messages": messages,
+            "stream": False,
+        },
+        timeout=90,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    answer = payload["choices"][0]["message"]["content"]
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("empty_model_response")
+    return answer.strip()
+
+
+def ask_ollama(messages: list[dict]) -> str:
     response = requests.post(
         OLLAMA_URL,
         json={"model": MODEL, "messages": messages, "stream": False},
-        timeout=180,
+        timeout=90,
     )
     response.raise_for_status()
-    return response.json()["message"]["content"]
+    answer = response.json()["message"]["content"]
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("empty_model_response")
+    return answer.strip()
+
+
+def hosted_ai_configured() -> bool:
+    return bool(ARIA_API_BASE_URL and ARIA_API_KEY)
+
+
+@app.get("/")
+def home():
+    return {
+        "assistant": "ARIA",
+        "status": "online",
+        "health": "/status",
+        "chat": "/chat",
+        "cloud_ai_configured": hosted_ai_configured(),
+    }
 
 
 @app.get("/status")
@@ -128,7 +187,7 @@ def status():
     try:
         response = requests.get(
             OLLAMA_URL.replace("/api/chat", "/api/tags"),
-            timeout=3,
+            timeout=2,
         )
         ollama_ok = response.ok
     except requests.RequestException:
@@ -140,6 +199,8 @@ def status():
         "model": MODEL,
         "cloud": True,
         "ollama": ollama_ok,
+        "cloud_ai_configured": hosted_ai_configured(),
+        "ai_provider": "openai-compatible" if hosted_ai_configured() else "ollama",
         "server_time": int(time.time()),
     }
 
@@ -180,12 +241,21 @@ def chat(
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
 
+    messages = chat_messages(request.prompt, request.history)
     try:
-        answer = ask_ollama(request.prompt, request.history)
-    except requests.RequestException as exc:
+        if hosted_ai_configured():
+            answer = ask_hosted_api(messages)
+        else:
+            answer = ask_ollama(messages)
+    except RuntimeError as exc:
         raise HTTPException(
             status_code=503,
-            detail="ollama_unavailable",
+            detail="cloud_ai_not_configured",
+        ) from exc
+    except (requests.RequestException, KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="ai_provider_unavailable_or_invalid_response",
         ) from exc
 
     now = int(time.time())
