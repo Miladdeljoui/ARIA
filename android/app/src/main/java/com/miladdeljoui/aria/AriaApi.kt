@@ -134,4 +134,41 @@ class AriaApi {
             path = "/status"
         )
     }
+
+    fun subscription(baseUrl: String, token: String): JSONObject {
+        return request(
+            method = "GET",
+            baseUrl = baseUrl,
+            path = "/subscription",
+            token = token
+        )
+    }
+
+    fun sendFeedback(
+        baseUrl: String,
+        token: String,
+        category: String,
+        message: String,
+        appVersion: String
+    ): JSONObject {
+        return request(
+            method = "POST",
+            baseUrl = baseUrl,
+            path = "/feedback",
+            body = JSONObject()
+                .put("category", category)
+                .put("message", message)
+                .put("app_version", appVersion),
+            token = token
+        )
+    }
+
+    fun latestUpdate(baseUrl: String): JSONObject {
+        return request(
+            method = "GET",
+            baseUrl = baseUrl,
+            path = "/updates/latest"
+        )
+    }
+
 }
