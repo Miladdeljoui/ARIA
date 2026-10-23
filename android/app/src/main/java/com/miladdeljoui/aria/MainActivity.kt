@@ -655,9 +655,7 @@ private fun AriaApp(
 
         if (showPackages) {
             val persianDate = remember {
-                android.icu.text.SimpleDateFormat("yyyy/MM/dd", Locale("fa", "IR")).apply {
-                    calendar = android.icu.util.PersianCalendar()
-                }.format(java.util.Date())
+                java.text.SimpleDateFormat("yyyy/MM/dd", Locale("fa", "IR")).format(java.util.Date())
                     .map { ch -> if (ch in '0'..'9') "۰۱۲۳۴۵۶۷۸۹"[ch - '0'] else ch }
                     .joinToString("")
             }
