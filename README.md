@@ -105,3 +105,7 @@ Compose's built-in animation APIs power the eye/HUD effects, keeping the interfa
 ## Public app and subscription roadmap
 
 The planned public release, free-trial/subscription tiers, verified payment handling, owner user-management console, ideas menu, update notices, Persian voice, and resilient local/domestic/cloud modes are documented in [docs/public-product-roadmap.md](docs/public-product-roadmap.md). These are roadmap items, not claims that billing or public production service is already live. The Android APK build must succeed and be tested before sharing a public installer.
+
+## VPN, creative studio, and updates roadmap
+
+The proposed separate VPN menu, official Shir o Khorshid/MahsaNG links, image/video generation, owner-free access, and app update notices are documented in [docs/vpn-creative-updates-roadmap.md](docs/vpn-creative-updates-roadmap.md). These are roadmap items; direct VPN tunneling, creative generation, owner subscriptions, and push updates are not claimed as implemented.
