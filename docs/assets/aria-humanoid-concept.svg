@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">ARIA humanoid assistant concept</title>
+  <desc id="desc">A futuristic, non-human humanoid AI assistant silhouette with a dark glass face and violet, cyan, and magenta luminous contours, displayed as a concept direction for the ARIA project.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#080b18"/><stop offset=".55" stop-color="#17102f"/><stop offset="1" stop-color="#071d2a"/></linearGradient>
+    <radialGradient id="halo"><stop stop-color="#b52dff" stop-opacity=".45"/><stop offset="1" stop-color="#6a20ff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff65ef"/><stop offset=".48" stop-color="#9d5bff"/><stop offset="1" stop-color="#4df4ff"/></linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#202440"/><stop offset=".5" stop-color="#090d1c"/><stop offset="1" stop-color="#302044"/></linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse"><path d="M42 0H0V42" fill="none" stroke="#8f77d6" stroke-opacity=".1" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1200" height="900" rx="36" fill="url(#bg)"/>
+  <rect width="1200" height="900" rx="36" fill="url(#grid)"/>
+  <ellipse cx="600" cy="405" rx="390" ry="370" fill="url(#halo)"/>
+  <g fill="none" stroke="url(#line)" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <path d="M445 254 C397 285 356 343 342 408 L305 545 C295 582 321 603 350 575 L420 464" stroke-width="8"/>
+    <path d="M755 254 C803 285 844 343 858 408 L895 545 C905 582 879 603 850 575 L780 464" stroke-width="8"/>
+    <path d="M451 254 C474 216 515 193 600 193 C685 193 726 216 749 254 L785 369 L751 480 L708 602 L675 686 L525 686 L492 602 L449 480 L415 369 Z" stroke-width="5"/>
+    <path d="M464 282 C495 254 544 241 600 241 C656 241 705 254 736 282 L711 361 L679 416 L600 448 L521 416 L489 361 Z" stroke-width="4"/>
+    <path d="M489 361 L527 390 L600 410 L673 390 L711 361" stroke-width="3"/>
+    <path d="M515 467 C538 487 563 498 600 498 C637 498 662 487 685 467" stroke-width="4"/>
+    <path d="M475 503 L525 545 L565 574 L600 590 L635 574 L675 545 L725 503" stroke-width="4"/>
+    <path d="M492 602 L550 626 L600 638 L650 626 L708 602" stroke-width="4"/>
+  </g>
+  <path d="M518 281 Q600 250 682 281 L666 365 Q643 402 600 412 Q557 402 534 365Z" fill="url(#face)" stroke="#d783ff" stroke-width="3"/>
+  <g filter="url(#glow)">
+    <path d="M545 330 Q566 311 586 330 Q566 350 545 330Z" fill="#64f4ff"/>
+    <path d="M614 330 Q634 311 655 330 Q634 350 614 330Z" fill="#64f4ff"/>
+    <path d="M557 373 Q600 390 643 373" fill="none" stroke="#b15dff" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <g fill="#e9e5ff" font-family="Arial, Helvetica, sans-serif">
+    <text x="600" y="765" font-size="64" font-weight="700" letter-spacing="12" text-anchor="middle">ARIA</text>
+    <text x="600" y="811" font-size="20" letter-spacing="4" text-anchor="middle" fill="#9beeff">PERSONAL AI • VISUAL CONCEPT</text>
+  </g>
+  <g fill="none" stroke="#8b65ff" stroke-opacity=".7" stroke-width="2">
+    <path d="M90 130 H260 L290 160"/><path d="M1110 130 H940 L910 160"/>
+    <circle cx="90" cy="130" r="5" fill="#65f5ff"/><circle cx="1110" cy="130" r="5" fill="#ff65ef"/>
+  </g>
+</svg>
