@@ -14,9 +14,11 @@ APP_PORT = int(os.getenv("ARIA_PORT", "8000"))
 OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 # Configure an OpenAI-compatible hosted inference endpoint to run ARIA without a laptop.
 # Example endpoint: https://openrouter.ai/api/v1/chat/completions
-ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", "").strip()
+ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", "https://openrouter.ai/api/v1/chat/completions").strip()
 ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip()
-MODEL = os.getenv("ARIA_MODEL", "qwen3:1.7b")
+MODEL = os.getenv("ARIA_MODEL", "").strip() or ("openrouter/free" if os.getenv("ARIA_API_KEY", "").strip() else "qwen3:1.7b")
+if os.getenv("ARIA_API_KEY", "").strip() and MODEL == "qwen3:1.7b":
+    MODEL = "openrouter/free"
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
 PAIRING_CODE = os.getenv("ARIA_PAIRING_CODE", "")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
