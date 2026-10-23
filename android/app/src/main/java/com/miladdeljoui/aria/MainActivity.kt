@@ -52,7 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -538,9 +538,9 @@ private fun AriaApp(
             }
         }
 
-        Box(Modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center, content = {
             AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
-        }
+        })
 
         Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
         Text(voiceStatus, color = AriaMuted, style = MaterialTheme.typography.labelSmall)
@@ -721,7 +721,8 @@ private fun DrawScope.drawAvaCore(scale: Float, rotation: Float, lid: Float, lis
         startAngle = rotation,
         sweepAngle = if (listening) 100f else 55f,
         useCenter = false,
-        topLeft = Rect(center.x - radius, center.y - radius, 2f * radius, 2f * radius),
+        topLeft = Offset(center.x - radius, center.y - radius),
+        size = Size(2f * radius, 2f * radius),
         style = Stroke(width = 2.5f, cap = StrokeCap.Round)
     )
 
