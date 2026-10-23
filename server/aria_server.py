@@ -221,8 +221,15 @@ def ask_local(prompt: str) -> tuple[str, dict]:
     lesson_text = "\n".join(f"- {x['topic']}" for x in lessons) or "-"
     recent_text = "\n".join(f"{x['role']}: {x['content']}" for x in recent)
 
+    source_knowledge_path = ROOT / "knowledge" / "matin_senpai.md"
+    try:
+        source_knowledge = source_knowledge_path.read_text(encoding="utf-8")[:4500]
+    except OSError:
+        source_knowledge = ""
+
     system = (
         f"{ARIA_PERSONA}\n\n"
+        f"دانش مرجع گزیده از کانال Matin SenPai (با اولویت بررسی منبع و تاریخ):\n{source_knowledge}\n\n"
         f"مجوز: {decision.level.value} — {decision.reason}\n\n"
         f"حافظه:\n{memory_text}\n\nدرس‌ها:\n{lesson_text}\n\n"
         f"اخیر:\n{recent_text}\n\n{learning_block}\n"
