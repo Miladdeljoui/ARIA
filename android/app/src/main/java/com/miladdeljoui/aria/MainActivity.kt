@@ -365,6 +365,7 @@ private fun AriaApp(
         mutableStateOf(prefs.getString("local_token", "") ?: "")
     }
     var pairingCode by remember { mutableStateOf("") }
+    var showPackages by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("هسته باز است — به آرامی مشاهده می‌کند") }
     var onlineMode by remember { mutableStateOf("STANDBY") }
@@ -534,6 +535,7 @@ private fun AriaApp(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(onlineMode, color = AriaCyan, style = MaterialTheme.typography.labelSmall)
+                OutlinedButton(onClick = { showPackages = true }) { Text("بسته‌ها") }
                 OutlinedButton(onClick = onLock) { Text("قفل") }
             }
         }
@@ -649,6 +651,41 @@ private fun AriaApp(
             Button(onClick = { sendMessage() }, modifier = Modifier.height(56.dp)) {
                 Text("ارسال")
             }
+        }
+
+        if (showPackages) {
+            val persianDate = remember {
+                android.icu.text.SimpleDateFormat("yyyy/MM/dd", Locale("fa", "IR")).apply {
+                    calendar = android.icu.util.PersianCalendar()
+                }.format(java.util.Date())
+                    .map { ch -> if (ch in '0'..'9') "۰۱۲۳۴۵۶۷۸۹"[ch - '0'] else ch }
+                    .joinToString("")
+            }
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showPackages = false },
+                title = { Text("بسته‌های اشتراک ARIA") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("تاریخ امروز: $persianDate", color = AriaCyan)
+                        Text("دوره آزمایشی", fontWeight = FontWeight.Bold)
+                        Text("۳۰ روز رایگان برای کاربران جدید در دوره بتا")
+                        Text("بسته ماهانه", fontWeight = FontWeight.Bold)
+                        Text("۹۹٬۰۰۰ تومان برای هر ماه")
+                        Text("پس از پایان دوره آزمایشی")
+                        Text(
+                            "توجه: پرداخت آنلاین هنوز فعال نشده است؛ فعلاً از داخل این صفحه پولی پرداخت نکن.",
+                            color = AriaMuted,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { showPackages = false }) { Text("متوجه شدم") }
+                },
+                containerColor = AriaPanel,
+                titleContentColor = AriaCyan,
+                textContentColor = AriaText
+            )
         }
     }
 }
