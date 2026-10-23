@@ -2,6 +2,12 @@
 
 Personal AI assistant project built step by step with Python, Ollama, Kotlin and Jetpack Compose.
 
+## ARIA visual concept
+
+![ARIA humanoid visual concept](docs/assets/aria-humanoid-concept.svg)
+
+This is a concept illustration for a possible future embodied ARIA interface, not a claim that a humanoid robot has been built. See [MIRA visual research and ARIA design direction](docs/mira-visual-research.md) for related open-source projects and the planned, safety-conscious adaptation.
+
 ## Current milestone
 
 ARIA now has a two-device local-first prototype:
@@ -62,6 +68,9 @@ The Android companion uses Jetpack Compose and Android Text-to-Speech. The lapto
         architecture.md
         protection.md
         android-setup.md
+        mira-visual-research.md
+        assets/
+            aria-humanoid-concept.svg
     learning/
         01-ollama.md
         02-architecture.md
@@ -79,7 +88,6 @@ ARIA is designed to assist its owner, not to bypass operating-system security or
 
 See docs/android-setup.md for the Android + laptop setup and docs/protection.md for the threat-awareness architecture.
 
-
 ## Latest milestone
 
 The ARIA core now includes persistent memory, deterministic permission classification, online/local runtime selection, Android cloud-first fallback architecture, and automated Python tests.
@@ -90,6 +98,6 @@ The next phase is the safe tool registry and owner approval workflow.
 
 The Android client and laptop web dashboard now share the ARIA visual language: animated central eye, live connectivity state, chat panel, Persian speech input and Persian text-to-speech output.
 
-Voice recognition is implemented as press-to-talk rather than an always-listening loop. Android's SpeechRecognizer documentation notes that the platform recognizer may stream audio to remote services and is not intended for continuous recognition, so continuous listening will be added only with an explicit local/permission-aware design. citeturn634388search8
+Voice recognition is implemented as press-to-talk rather than an always-listening loop. Android's SpeechRecognizer documentation notes that the platform recognizer may stream audio to remote services and is not intended for continuous recognition, so continuous listening will be added only with an explicit local/permission-aware design.
 
-Compose's built-in animation APIs power the eye/HUD effects, keeping the interface lightweight and testable. citeturn634388search0turn634388search4
+Compose's built-in animation APIs power the eye/HUD effects, keeping the interface lightweight and testable.
