@@ -287,6 +287,23 @@ private fun AriaApp(
         )
     }
 
+    LaunchedEffect(Unit) {
+        status = "در حال بازیابی اتصال‌های ذخیره‌شده…"
+        executor.execute {
+            var connected = ""
+            if (localUrl.isNotBlank() && localToken.isNotBlank()) {
+                try { api.subscription(localUrl, localToken); connected = "LOCAL" } catch (_: Exception) { }
+            }
+            if (connected.isBlank() && cloudUrl.isNotBlank() && cloudToken.isNotBlank()) {
+                try { api.subscription(cloudUrl, cloudToken); connected = "CLOUD" } catch (_: Exception) { }
+            }
+            updateUi {
+                onlineMode = if (connected.isBlank()) "STANDBY" else connected
+                status = if (connected.isBlank()) "برای اتصال اولیه یک‌بار جفت‌سازی لازم است." else "اتصال $connected خودکار بازیابی شد."
+            }
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             voiceController.destroy()
