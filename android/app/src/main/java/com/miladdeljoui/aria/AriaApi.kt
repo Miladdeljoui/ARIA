@@ -57,17 +57,19 @@ class AriaApi {
 
         if (responseCode !in 200..299) {
             val parsed = runCatching { JSONObject(raw) }.getOrNull()
+            val detail = parsed?.optString("detail").orEmpty()
             val errorCode = parsed?.optString("error", "http_error") ?: "http_error"
-            val message = parsed?.optString("message")
-                ?.takeIf { it.isNotBlank() }
-                ?: parsed?.optString("hint")
-                ?: when (errorCode) {
+            val message = parsed?.optString("message")?.takeIf { it.isNotBlank() }
+                ?: parsed?.optString("hint")?.takeIf { it.isNotBlank() }
+                ?: when (detail.ifBlank { errorCode }) {
+                    "cloud_ai_not_configured" ->
+                        "مدل هوش مصنوعی ابری هنوز تنظیم نشده است."
+                    "ai_provider_unavailable_or_invalid_response" ->
+                        "سرویس هوش مصنوعی پاسخ نداد؛ تنظیمات مدل ابری را بررسی کنید."
                     "invalid_pairing_code" ->
-                        "کد جفت‌سازی اشتباه است. کد ۶ رقمی ترمینال سرور را وارد کنید."
+                        "کد جفت‌سازی اشتباه است. کد ۶ رقمی را بررسی کنید."
                     "unauthorized" ->
-                        "دستگاه هنوز جفت نشده یا توکن منقضی شده است."
-                    "ollama_unavailable" ->
-                        "Ollama روی لپ‌تاپ نیست. در ترمینال بزن: ollama serve و بعد ollama pull qwen3:1.7b"
+                        "این دستگاه جفت نشده است. دوباره جفت‌سازی کنید."
                     else ->
                         "خطای ارتباط (HTTP $responseCode)"
                 }
