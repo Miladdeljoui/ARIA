@@ -131,7 +131,7 @@ private fun AriaRoot(
     val prefs = remember {
         context.getSharedPreferences("aria_profile", Context.MODE_PRIVATE)
     }
-    var signedIn by remember { mutableStateOf(prefs.getBoolean("guest_ready", false)) }
+    var signedIn by remember { mutableStateOf(prefs.getBoolean("guest_ready", true)) }
 
     if (!signedIn) {
         GuestSignInScreen(
@@ -180,11 +180,10 @@ private fun GuestSignInScreen(
             Text("دستیار هوشمند شخصی تو", color = Color(0xFFB8C5D9))
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
-                onClick = { error = "ورود گوگل هنوز راه‌اندازی نشده؛ فعلاً ورود مهمان رایگان است." },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false
+                onClick = { error = "ورود گوگل هنوز به سرویس OAuth متصل نشده است." },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("ورود با حساب گوگل · به‌زودی")
+                Text("G  ورود با حساب گوگل")
             }
             Text("یا ورود مهمان رایگان", color = Color(0xFF7DE3D1))
             OutlinedTextField(
