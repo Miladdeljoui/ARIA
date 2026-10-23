@@ -103,3 +103,17 @@ Before paid/public launch:
 - Choose a legitimate payment gateway or define the manual bank-reconciliation process.
 - Decide whether user accounts require phone/email or can use passkeys/anonymous IDs.
 - Publish terms, privacy, cancellation, support, and refund policy.
+
+
+## Confirmed beta settings (2026-10-23)
+
+The owner confirmed these settings; they replace the proposed price/trial values above for the beta plan:
+
+- Owner email: `miladdeljoui22@gmail.com`, free forever only after server-verified Google sign-in.
+- Everyone else: 30-day free trial during the public beta.
+- Monthly price after trial: 99,000 toman (990,000 rial when calling Zarinpal endpoints that expect rial).
+- Payment starts in Zarinpal sandbox, with server-side verification before subscription activation.
+- Distribution: GitHub Releases.
+- In-app feedback: users can submit bug reports, suggestions and ratings; reports should be stored server-side for owner review.
+
+These settings are recorded, but are **not implemented merely by appearing in this document**. Required work: verify Google ID tokens, enforce trials on the server, store accounts/subscriptions/payments, implement Zarinpal request and verification callbacks idempotently, add feedback endpoints and UI, add GitHub Release update checking, then build and test the APK. Do not embed secrets in Android or commit real credentials.
