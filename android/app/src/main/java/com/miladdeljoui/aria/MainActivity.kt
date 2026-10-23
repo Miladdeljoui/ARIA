@@ -358,7 +358,7 @@ private fun AriaApp(
     val api = remember { AriaApi() }
 
     var cloudUrl by remember {
-        mutableStateOf(prefs.getString("cloud_url", "") ?: "")
+        mutableStateOf(prefs.getString("cloud_url", "https://aria-2.weblines.ir") ?: "https://aria-2.weblines.ir")
     }
     var localUrl by remember {
         mutableStateOf(
