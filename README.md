@@ -101,3 +101,7 @@ The Android client and laptop web dashboard now share the ARIA visual language: 
 Voice recognition is implemented as press-to-talk rather than an always-listening loop. Android's SpeechRecognizer documentation notes that the platform recognizer may stream audio to remote services and is not intended for continuous recognition, so continuous listening will be added only with an explicit local/permission-aware design.
 
 Compose's built-in animation APIs power the eye/HUD effects, keeping the interface lightweight and testable.
+
+## Public app and subscription roadmap
+
+The planned public release, free-trial/subscription tiers, verified payment handling, owner user-management console, ideas menu, update notices, Persian voice, and resilient local/domestic/cloud modes are documented in [docs/public-product-roadmap.md](docs/public-product-roadmap.md). These are roadmap items, not claims that billing or public production service is already live. The Android APK build must succeed and be tested before sharing a public installer.
