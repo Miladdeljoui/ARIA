@@ -487,16 +487,17 @@ private fun AriaApp(
                 var response: AriaResponse? = null
                 var source = ""
 
-                if (cloudToken.isNotBlank() && cloudUrl.isNotBlank()) {
+                // Local-first: keeps chat usable on the home LAN if public internet is blocked.
+                if (localToken.isNotBlank() && localUrl.isNotBlank()) {
                     try {
-                        response = api.chat(cloudUrl, cloudToken, prompt)
-                        source = "Cloud"
+                        response = api.chat(localUrl, localToken, prompt)
+                        source = "Local"
                     } catch (_: Exception) {
                     }
                 }
-                if (response == null && localToken.isNotBlank() && localUrl.isNotBlank()) {
-                    response = api.chat(localUrl, localToken, prompt)
-                    source = "Local"
+                if (response == null && cloudToken.isNotBlank() && cloudUrl.isNotBlank()) {
+                    response = api.chat(cloudUrl, cloudToken, prompt)
+                    source = "Cloud"
                 }
                 if (response == null) {
                     error("اتصال به ARIA نیست. اول جفت‌سازی کن. اگر ollama_unavailable دیدی روی لپ‌تاپ: ollama serve")
