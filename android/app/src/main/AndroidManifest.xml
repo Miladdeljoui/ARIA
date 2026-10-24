@@ -4,14 +4,13 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/aria_launcher"
+        android:roundIcon="@drawable/aria_launcher"
         android:allowBackup="true"
         android:label="ARIA AI"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.ARIA">
-
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -20,6 +19,5 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
     </application>
 </manifest>
