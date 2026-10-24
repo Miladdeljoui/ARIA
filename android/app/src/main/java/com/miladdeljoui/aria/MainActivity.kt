@@ -427,174 +427,191 @@ private fun AriaApp(
         }
     }
 
-    Column(
+    var showSettings by remember { mutableStateOf(false) }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(AriaBackground)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF050914), Color(0xFF0A1024), Color(0xFF070B17))
+                )
+            )
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column {
-                Text("ARIA", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Light, color = AriaCyan)
-                Text("OBSERVING · LOCAL CORE", color = AriaMuted, style = MaterialTheme.typography.labelSmall)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(onlineMode, color = AriaCyan, style = MaterialTheme.typography.labelSmall)
-                OutlinedButton(onClick = { showPackages = true }) { Text("بسته‌ها") }
-            }
-        }
-
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center, content = {
-            AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
-        })
-
-        Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
-        Text(voiceStatus, color = AriaMuted, style = MaterialTheme.typography.labelSmall)
-
-        Text("اتصال جایگزین اینترنت", color = AriaCyan, style = MaterialTheme.typography.labelMedium)
-        Text(
-            "یکی از VPNهای جداگانه را نصب و وصل کن؛ ARIA خودش تونل VPN را مدیریت نمی‌کند.",
-            color = AriaMuted,
-            style = MaterialTheme.typography.bodySmall
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/shirokhorshid/shirokhorshid-android/releases"))
-                    )
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("شیر و خورشید") }
-            OutlinedButton(
-                onClick = {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/GFW-knocker/MahsaNG/releases/latest"))
-                    )
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("مهسا") }
-        }
-        OutlinedButton(
-            onClick = {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=org.torproject.android"))
-                )
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Orbot / Tor") }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = cloudUrl,
-                onValueChange = { cloudUrl = it },
-                modifier = Modifier.weight(1f),
-                label = { Text("Cloud") }
-            )
-            OutlinedButton(onClick = { pairCloud() }) { Text("اتصال") }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = localUrl,
-                onValueChange = { localUrl = it },
-                modifier = Modifier.weight(1f),
-                label = { Text("Laptop") }
-            )
-            OutlinedButton(onClick = { pairLocal() }) { Text("اتصال") }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = pairingCode,
-                onValueChange = { pairingCode = it.filter { c -> c.isDigit() }.take(6) },
-                modifier = Modifier.weight(1f),
-                label = { Text("کد ۶ رقمی") }
-            )
-            Button(
-                onClick = requestMicPermission,
-                colors = ButtonDefaults.buttonColors(containerColor = AriaCyanSoft, contentColor = AriaCyan)
-            ) { Text("مجوز صدا") }
-        }
-
-        LazyColumn(
-            modifier = Modifier
-                .height(220.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(AriaPanel)
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(messages) { item ->
-                Text(
-                    text = (if (item.owner) "تو · " else "ARIA · ") + item.text,
-                    color = if (item.owner) AriaText else AriaCyan,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-                        == PackageManager.PERMISSION_GRANTED
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        modifier = Modifier.size(42.dp).clip(CircleShape)
+                            .background(Brush.radialGradient(listOf(Color(0xFF72F7FF), Color(0xFF7557FF), Color(0xFF11152D)))),
+                        contentAlignment = Alignment.Center
                     ) {
-                        voiceController.start()
-                    } else requestMicPermission()
-                },
-                modifier = Modifier.size(56.dp),
-                shape = CircleShape
-            ) { Text("🎙") }
-
-            OutlinedTextField(
-                value = message,
-                onValueChange = { message = it },
-                modifier = Modifier.weight(1f),
-                label = { Text("با ARIA حرف بزن") }
-            )
-            Button(onClick = { sendMessage() }, modifier = Modifier.height(56.dp)) {
-                Text("ارسال")
-            }
-        }
-
-        if (showPackages) {
-            val persianDate = remember {
-                java.text.SimpleDateFormat("yyyy/MM/dd", Locale("fa", "IR")).format(java.util.Date())
-                    .map { ch -> if (ch in '0'..'9') "۰۱۲۳۴۵۶۷۸۹"[ch - '0'] else ch }
-                    .joinToString("")
-            }
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showPackages = false },
-                title = { Text("بسته‌های اشتراک ARIA") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("تاریخ امروز: $persianDate", color = AriaCyan)
-                        Text("دوره آزمایشی", fontWeight = FontWeight.Bold)
-                        Text("۳۰ روز رایگان برای کاربران جدید در دوره بتا")
-                        Text("بسته ماهانه", fontWeight = FontWeight.Bold)
-                        Text("۹۹٬۰۰۰ تومان برای هر ماه")
-                        Text("پس از پایان دوره آزمایشی")
-                        Text(
-                            "توجه: پرداخت آنلاین هنوز فعال نشده است؛ فعلاً از داخل این صفحه پولی پرداخت نکن.",
-                            color = AriaMuted,
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text("✦", color = Color.White, style = MaterialTheme.typography.headlineSmall)
                     }
-                },
-                confirmButton = {
-                    Button(onClick = { showPackages = false }) { Text("متوجه شدم") }
-                },
-                containerColor = AriaPanel,
-                titleContentColor = AriaCyan,
-                textContentColor = AriaText
-            )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("ARIA", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F7FF))
+                        Text("YOUR COSMIC AI", color = Color(0xFF7C8AA8), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF122A35)).padding(horizontal = 10.dp, vertical = 7.dp)
+                    ) {
+                        Text(onlineMode, color = Color(0xFF6CF5D2), style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(onClick = { showSettings = true }) { Text("تنظیمات") }
+                }
+            }
+
+            Box(
+                modifier = Modifier.fillMaxWidth().height(190.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xFF10182A)).padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    if (onlineMode == "STANDBY") "هسته آماده است" else "هسته متصل است",
+                    color = Color(0xFF85F4E5), fontWeight = FontWeight.Medium
+                )
+                Text(status, color = Color(0xFFADB9D0), style = MaterialTheme.typography.bodySmall)
+                if (voiceStatus != "آماده") Text(voiceStatus, color = Color(0xFF9DABCA), style = MaterialTheme.typography.labelSmall)
+            }
+
+            if (messages.isEmpty()) {
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("از کجا شروع کنیم؟", color = Color(0xFFF1F4FF), style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text("سؤالت را بنویس یا با ARIA صحبت کن.", color = Color(0xFF8F9BB5))
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                        .background(Color(0x9910192B)).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(messages) { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = if (item.owner) Arrangement.End else Arrangement.Start
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(0.88f)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (item.owner) Color(0xFF183348) else Color(0xFF151D32))
+                                    .padding(12.dp)
+                            ) {
+                                Text(if (item.owner) "تو" else "ARIA", color = if (item.owner) Color(0xFF70E6F7) else Color(0xFFB5A5FF), style = MaterialTheme.typography.labelSmall)
+                                Spacer(Modifier.height(4.dp))
+                                Text(item.text, color = Color(0xFFE8EEFC))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF151D30)).padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            voiceController.start()
+                        } else requestMicPermission()
+                    },
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                ) { Text("🎙") }
+
+                OutlinedTextField(
+                    value = message,
+                    onValueChange = { message = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("پیامت را برای ARIA بنویس…") },
+                    singleLine = false,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(18.dp)
+                )
+                Button(
+                    onClick = { sendMessage() },
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6D7BFF), contentColor = Color.White)
+                ) { Text("➤") }
+            }
         }
+    }
+
+    if (showSettings) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showSettings = false },
+            title = { Text("اتصال و تنظیمات ARIA") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("اتصال محلی به لپ‌تاپ", color = AriaCyan)
+                    OutlinedTextField(value = localUrl, onValueChange = { localUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("آدرس لپ‌تاپ") }, singleLine = true)
+                    OutlinedButton(onClick = { pairLocal() }, modifier = Modifier.fillMaxWidth()) { Text("جفت‌سازی با لپ‌تاپ") }
+                    Text("اتصال ابری", color = AriaCyan)
+                    OutlinedTextField(value = cloudUrl, onValueChange = { cloudUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("آدرس Cloud") }, singleLine = true)
+                    OutlinedButton(onClick = { pairCloud() }, modifier = Modifier.fillMaxWidth()) { Text("جفت‌سازی با Cloud") }
+                    OutlinedTextField(
+                        value = pairingCode,
+                        onValueChange = { pairingCode = it.filter { ch -> ch.isDigit() }.take(6) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("کد جفت‌سازی ۶ رقمی") },
+                        singleLine = true
+                    )
+                    OutlinedButton(onClick = requestMicPermission, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن مجوز میکروفون") }
+                    Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { showPackages = true }, modifier = Modifier.fillMaxWidth()) { Text("اطلاعات بسته‌ها") }
+                }
+            },
+            confirmButton = { Button(onClick = { showSettings = false }) { Text("بستن") } },
+            containerColor = AriaPanel,
+            titleContentColor = AriaCyan,
+            textContentColor = AriaText
+        )
+    }
+
+    if (showPackages) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showPackages = false },
+            title = { Text("بسته‌های ARIA") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("نسخهٔ آزمایشی ARIA", color = AriaCyan)
+                    Text("پرداخت آنلاین در برنامه فعال نیست. برای این نسخه هیچ پرداختی انجام نده.")
+                }
+            },
+            confirmButton = { Button(onClick = { showPackages = false }) { Text("متوجه شدم") } },
+            containerColor = AriaPanel,
+            titleContentColor = AriaCyan,
+            textContentColor = AriaText
+        )
     }
 }
 
