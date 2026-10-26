@@ -158,7 +158,7 @@ class PublicStore:
         if duration_seconds <= 0:
             raise ValueError("duration_seconds must be positive")
         now = _now() if now is None else int(now)
-        sub_id, event_id = secrets.token_urlsafe(18), secrets.token_urlsafe(18)
+        sub_id = secrets.token_urlsafe(18)
         with self.connection() as db:
             user = db.execute("SELECT status FROM public_users WHERE id=?",
                               (user_id,)).fetchone()
@@ -182,7 +182,7 @@ class PublicStore:
             db.execute("""INSERT INTO entitlement_events
                 (id,user_id,event_type,source_id,starts_at,expires_at,created_at)
                 VALUES (?,?,?,?,?,?,?)""",
-                (event_id,user_id,source,source_id,starts_at,expires_at,now))
+                (sub_id,user_id,source,source_id,starts_at,expires_at,now))
             return sub_id
 
     def create_referral(self, inviter_user_id: str, invited_user_id: str, code: str) -> str:
