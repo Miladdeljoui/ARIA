@@ -429,6 +429,9 @@ private fun AriaApp(
     }
 
     var showSettings by remember { mutableStateOf(false) }
+    var showFeedback by remember { mutableStateOf(false) }
+    var feedbackText by remember { mutableStateOf("") }
+    var feedbackCategory by remember { mutableStateOf("idea") }
 
     Box(
         modifier = Modifier
@@ -588,10 +591,83 @@ private fun AriaApp(
                     )
                     OutlinedButton(onClick = requestMicPermission, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن مجوز میکروفون") }
                     Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(
+                        onClick = { showSettings = false; showFeedback = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("ارسال نظر و پیشنهاد") }
                     OutlinedButton(onClick = { showPackages = true }, modifier = Modifier.fillMaxWidth()) { Text("اطلاعات بسته‌ها") }
                 }
             },
             confirmButton = { Button(onClick = { showSettings = false }) { Text("بستن") } },
+            containerColor = AriaPanel,
+            titleContentColor = AriaCyan,
+            textContentColor = AriaText
+        )
+    }
+
+    if (showFeedback) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showFeedback = false },
+            title = { Text("نظر و پیشنهاد برای ARIA") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("ایده یا ایرادت را مستقیم از داخل اپ برای سازنده بفرست.", color = AriaMuted)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OutlinedButton(onClick = { feedbackCategory = "idea" }, modifier = Modifier.weight(1f)) {
+                            Text(if (feedbackCategory == "idea") "✓ ایده" else "ایده")
+                        }
+                        OutlinedButton(onClick = { feedbackCategory = "bug" }, modifier = Modifier.weight(1f)) {
+                            Text(if (feedbackCategory == "bug") "✓ ایراد" else "ایراد")
+                        }
+                        OutlinedButton(onClick = { feedbackCategory = "general" }, modifier = Modifier.weight(1f)) {
+                            Text(if (feedbackCategory == "general") "✓ عمومی" else "عمومی")
+                        }
+                    }
+                    OutlinedTextField(
+                        value = feedbackText,
+                        onValueChange = { feedbackText = it.take(4000) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("پیام شما") },
+                        placeholder = { Text("چه چیزی را بهتر کنیم؟") },
+                        minLines = 4,
+                        maxLines = 7
+                    )
+                    Text("برای ثبت نظر، اپ باید به سرور ARIA جفت شده باشد.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val messageToSend = feedbackText.trim()
+                    val categoryToSend = feedbackCategory
+                    val tokenToUse = if (localToken.isNotBlank()) localToken else cloudToken
+                    val urlToUse = if (localToken.isNotBlank()) localUrl else cloudUrl
+                    when {
+                        messageToSend.length < 3 -> status = "پیام باید حداقل ۳ نویسه داشته باشد."
+                        tokenToUse.isBlank() -> status = "ابتدا ARIA را از تنظیمات به سرور جفت‌سازی کن."
+                        else -> executor.execute {
+                            try {
+                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.4.0-beta1")
+                                updateUi {
+                                    status = "نظر تو ثبت شد؛ ممنون از همراهی‌ات!"
+                                    feedbackText = ""
+                                    showFeedback = false
+                                }
+                            } catch (error: Exception) {
+                                updateUi { status = "ارسال نظر ناموفق بود: " + friendlyError(error) }
+                            }
+                        }
+                    }
+                }) { Text("ارسال نظر") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showFeedback = false }) { Text("انصراف") }
+            },
             containerColor = AriaPanel,
             titleContentColor = AriaCyan,
             textContentColor = AriaText
