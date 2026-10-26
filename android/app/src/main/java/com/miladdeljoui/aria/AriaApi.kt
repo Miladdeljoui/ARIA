@@ -171,15 +171,26 @@ class AriaApi {
     fun chat(
         baseUrl: String,
         token: String,
-        prompt: String
+        prompt: String,
+        history: List<Pair<String, String>> = emptyList()
     ): AriaResponse {
+        val historyJson = JSONArray()
+        history.takeLast(12).forEach { (role, content) ->
+            if ((role == "user" || role == "assistant") && content.isNotBlank()) {
+                historyJson.put(
+                    JSONObject()
+                        .put("role", role)
+                        .put("content", content.take(12000))
+                )
+            }
+        }
         val result = request(
             method = "POST",
             baseUrl = baseUrl,
             path = "/chat",
             body = JSONObject()
                 .put("prompt", prompt)
-                .put("history", JSONArray()),
+                .put("history", historyJson),
             token = token
         )
 
