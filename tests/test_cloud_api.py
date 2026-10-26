@@ -1,5 +1,3 @@
-import time
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -11,18 +9,14 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "DB_PATH", tmp_path / "test.db")
     monkeypatch.setattr(api, "TRIAL_DAYS", 30)
     monkeypatch.setattr(api, "MONTHLY_PRICE_TOMAN", 99000)
-    with api.db() as connection:
-        connection.execute(
-            "INSERT INTO settings(key, value) VALUES('pairing_code', ?)",
-            (api.sha256("123456"),),
-        )
-        connection.commit()
+    monkeypatch.setattr(api, "ARIA_MEDIA_ENABLED", False)
     return TestClient(api.app)
 
 
-def pair(client):
+def guest(client, client_id="test-installation-123456"):
     response = client.post(
-        "/pair", json={"code": "123456", "device_name": "test-phone"}
+        "/guest",
+        json={"client_id": client_id, "device_name": "test-phone"},
     )
     assert response.status_code == 200
     return response.json()["token"]
@@ -33,19 +27,12 @@ def test_home_and_status_are_available(client, monkeypatch):
     response = client.get("/")
     assert response.status_code == 200
     assert response.json()["assistant"] == "ARIA"
+    assert response.json()["anonymous_guest_access"] is True
     assert client.get("/status").status_code == 200
 
 
-def test_pair_rejects_wrong_code(client):
-    response = client.post(
-        "/pair", json={"code": "000000", "device_name": "test-phone"}
-    )
-    assert response.status_code == 401
-    assert response.json()["detail"] == "invalid_pairing_code"
-
-
-def test_pair_and_subscription_start_30_day_trial(client):
-    token = pair(client)
+def test_guest_registers_without_pairing_code_and_starts_trial(client):
+    token = guest(client)
     response = client.get("/subscription", headers={"X-ARIA-Token": token})
     assert response.status_code == 200
     body = response.json()
@@ -55,29 +42,37 @@ def test_pair_and_subscription_start_30_day_trial(client):
     assert body["access_granted"] is True
 
 
+def test_guest_reissue_invalidates_old_token_for_same_install(client):
+    token1 = guest(client, "stable-install-id-987654321")
+    token2 = guest(client, "stable-install-id-987654321")
+    assert token1 != token2
+    assert client.get("/subscription", headers={"X-ARIA-Token": token1}).status_code == 401
+    assert client.get("/subscription", headers={"X-ARIA-Token": token2}).status_code == 200
+
+
 def test_subscription_requires_valid_token(client):
     response = client.get("/subscription", headers={"X-ARIA-Token": "invalid"})
     assert response.status_code == 401
 
 
-def test_feedback_requires_pairing_and_saves_valid_feedback(client):
+def test_feedback_requires_token_and_saves_feedback(client):
     unauthorized = client.post(
         "/feedback", json={"category": "idea", "message": "Add dark mode"}
     )
     assert unauthorized.status_code == 401
 
-    token = pair(client)
+    token = guest(client)
     response = client.post(
         "/feedback",
         headers={"X-ARIA-Token": token},
-        json={"category": "idea", "message": "Add dark mode", "app_version": "0.3.0"},
+        json={"category": "idea", "message": "Add dark mode", "app_version": "0.4.0-beta1"},
     )
     assert response.status_code == 200
     assert response.json()["ok"] is True
 
 
 def test_feedback_rejects_unknown_category(client):
-    token = pair(client)
+    token = guest(client)
     response = client.post(
         "/feedback",
         headers={"X-ARIA-Token": token},
@@ -86,9 +81,44 @@ def test_feedback_rejects_unknown_category(client):
     assert response.status_code == 422
 
 
-def test_chat_requires_pairing(client):
-    response = client.post("/chat", json={"prompt": "سلام"})
-    assert response.status_code == 401
+def test_chat_rejects_missing_and_invalid_tokens(client):
+    assert client.post("/chat", json={"prompt": "سلام"}).status_code == 401
+    assert client.post(
+        "/chat",
+        headers={"X-ARIA-Token": "invalid"},
+        json={"prompt": "سلام"},
+    ).status_code == 401
+
+
+def test_chat_daily_device_limit_is_enforced(client):
+    token = guest(client)
+    device_id = api.device_id_from_token(token)
+    now = __import__("time").time()
+    with api.db() as connection:
+        for index in range(10):
+            connection.execute(
+                "INSERT INTO messages(device_id, role, content, created_at) VALUES (?, 'user', ?, ?)",
+                (device_id, f"test-{index}", int(now)),
+            )
+        connection.commit()
+    response = client.post(
+        "/chat",
+        headers={"X-ARIA-Token": token},
+        json={"prompt": "Should hit the rate limit"},
+    )
+    assert response.status_code == 429
+    assert response.json()["detail"] == "daily_guest_chat_limit"
+
+
+def test_media_disabled_by_default(client, monkeypatch):
+    token = guest(client)
+    response = client.post(
+        "/media/image",
+        headers={"X-ARIA-Token": token},
+        json={"prompt": "a blue cat"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "media_generation_disabled_by_server"
 
 
 def test_latest_update_handles_missing_release(client, monkeypatch):
