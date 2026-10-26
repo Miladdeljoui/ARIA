@@ -1,10 +1,6 @@
-name: ARIA Android Build
+name: ARIA Android Build (manual)
 
 on:
-  push:
-    paths:
-      - "android/**"
-      - ".github/workflows/android-build.yml"
   workflow_dispatch:
 
 permissions:
@@ -25,7 +21,7 @@ jobs:
           java-version: "17"
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "8.13"
           cache-provider: basic
@@ -33,7 +29,7 @@ jobs:
       - name: Build universal debug APK
         run: gradle -p android :app:assembleDebug --no-daemon
 
-      - name: Verify APK exists and report size
+      - name: Verify APK
         shell: bash
         run: |
           test -s android/app/build/outputs/apk/debug/app-debug.apk
@@ -43,7 +39,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: ARIA-Android-APK
+          name: ARIA-Android-manual-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
