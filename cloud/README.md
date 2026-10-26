@@ -45,20 +45,33 @@ Model IDs and provider prices can change, so check the OpenRouter model catalogu
 
 ## Deployment
 
-For an existing Weblines deployment, set environment variables in the Weblines console and redeploy the connected Git repository. I cannot modify private hosting secrets from the repository connector alone, so this last step requires access to the hosting account.
+### Recommended lowest-cost deployment
 
-For a new VPS, the API proxy alone can run on a small instance because inference runs at OpenRouter, not on the VPS. Start with at least 1 vCPU, 1 GB RAM and 20 GB SSD for a light beta; add HTTPS via a domain and reverse proxy. Do not deploy Ollama on that small VPS unless you have verified its RAM/GPU needs. A local LLM needs much more memory and is a different cost profile.
+**Recommended first try:** keep the existing Weblines app if you still control it. In its Environment settings, add `ARIA_API_KEY` (keep its value secret), and set `ARIA_API_BASE_URL=https://openrouter.ai/api/v1/chat/completions`. Leave `ARIA_MEDIA_ENABLED=false` to prevent surprise generation costs, then redeploy the app from this repository. After it is redeployed, check `https://YOUR-ARIA-DOMAIN/status` and confirm that `cloud_ai_configured` is `true`. Do not assume the old domain is updated merely because GitHub changed.
 
-Example container deployment:
+If you prefer a foreign VPS, a light API proxy needs no GPU because inference happens at OpenRouter. One current low-cost example is Cherry Servers Cloud VPS 1 in Frankfurt, advertised around $3.51/month in the current catalog; confirm currency, VAT and the checkout total before ordering. A comparable official Hetzner CX23 listing in Germany is €6.49/month excluding IPv4 under the price table updated in June 2026, with VAT/IP charges potentially added. This small VPS is only for the API proxy, **not** a local model. See [Cherry Servers pricing](https://www.cherryservers.com/pricing) and [Hetzner price list](https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/).
+
+For a lightweight VPS, use the dedicated `docker-compose.remote.yml`, which deliberately omits Ollama:
 
 ```bash
 cd cloud
 cp .env.example .env
-# Edit .env locally; never commit the populated .env
-docker compose up -d --build
+# Edit .env locally. Set ARIA_DOMAIN to a subdomain whose DNS A record
+# points at your VPS. Put ARIA_API_KEY in .env only on the private server.
+# Never commit the real .env, expose the key, or put it in the APK.
+docker compose -f docker-compose.remote.yml up -d --build
 ```
 
-Check the service using `GET /status`. Never expose port 8000 directly to the public internet; use a TLS reverse proxy. Enable backups and monitor provider usage before sharing broadly.
+Before running the command, open the VPS firewall for TCP ports 80 and 443, point the domain's DNS A record to the VPS IPv4 address, replace `ARIA_DOMAIN=api.example.com` with your actual domain, and configure `ARIA_API_KEY`. Caddy will manage HTTPS for a valid domain. Do not expose port 8000 publicly.
+
+### Verify deployment
+
+1. Open `https://YOUR-ARIA-DOMAIN/status`. Check `cloud_ai_configured: true` and `anonymous_guest_access: true`.
+2. Open the app. It should automatically call `POST /guest`; no six-digit code is needed.
+3. Send a short Persian chat prompt. If that succeeds, text chat is connected.
+4. Leave media disabled until you intentionally top up OpenRouter credits and review model pricing. Set `ARIA_MEDIA_ENABLED=true` only then. Image generation currently checks that the OpenRouter credit balance is above its API minimum; free text-chat access does not make images or video free.
+
+Never expose port 8000 directly to the public internet. Enable persistent storage, backups and provider usage monitoring before sharing the app widely.
 
 ## Important current limitations
 
