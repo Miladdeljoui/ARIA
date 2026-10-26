@@ -1,6 +1,8 @@
 package com.miladdeljoui.aria
 
 import android.Manifest
+import android.graphics.BitmapFactory
+import android.util.Base64
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -20,6 +22,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +32,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -64,16 +68,18 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.Executors
 import kotlin.math.cos
 import kotlin.math.sin
 
-private data class ChatItem(val owner: Boolean, val text: String)
+private data class ChatItem(val owner: Boolean, val text: String, val imageBase64: String? = null, val videoUrl: String? = null)
 
 // پالت نزدیک به حس شیشه‌ای / فیروزه‌ای فیلم (الهام بصری، نه کپی)
 private val AriaCyanDim = Color(0xFF2DD4BF)
@@ -242,6 +248,7 @@ private fun AriaApp(
     }
     val uiHandler = remember { Handler(Looper.getMainLooper()) }
     val executor = remember { Executors.newSingleThreadExecutor() }
+    val mediaExecutor = remember { Executors.newSingleThreadExecutor() }
     val api = remember { AriaApi() }
 
     var cloudUrl by remember {
@@ -258,7 +265,7 @@ private fun AriaApp(
     var localToken by remember {
         mutableStateOf(prefs.getString("local_token", "") ?: "")
     }
-    var pairingCode by remember { mutableStateOf("") }
+    var composerMode by remember { mutableStateOf("chat") }
     var showPackages by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("هسته باز است — به آرامی مشاهده می‌کند") }
@@ -289,18 +296,42 @@ private fun AriaApp(
     }
 
     LaunchedEffect(Unit) {
-        status = "در حال بازیابی اتصال‌های ذخیره‌شده…"
+        status = "در حال اتصال خودکار به سرور…"
         executor.execute {
             var connected = ""
+            var aiReady = false
+            var failure = ""
             if (localUrl.isNotBlank() && localToken.isNotBlank()) {
                 try { api.subscription(localUrl, localToken); connected = "LOCAL" } catch (_: Exception) { }
             }
-            if (connected.isBlank() && cloudUrl.isNotBlank() && cloudToken.isNotBlank()) {
-                try { api.subscription(cloudUrl, cloudToken); connected = "CLOUD" } catch (_: Exception) { }
+            if (connected.isBlank() && cloudUrl.isNotBlank()) {
+                try {
+                    val installId = prefs.getString("guest_install_id", null)
+                        ?: UUID.randomUUID().toString().also {
+                            prefs.edit().putString("guest_install_id", it).apply()
+                        }
+                    val token = api.guest(cloudUrl.trimEnd('/'), installId, "ARIA Android")
+                    prefs.edit()
+                        .putString("cloud_url", cloudUrl.trimEnd('/'))
+                        .putString("cloud_token", token)
+                        .apply()
+                    api.subscription(cloudUrl.trimEnd('/'), token)
+                    val server = api.status(cloudUrl.trimEnd('/'))
+                    aiReady = server.optBoolean("cloud_ai_configured", false) || server.optBoolean("ollama", false)
+                    connected = "CLOUD"
+                    updateUi { cloudToken = token }
+                } catch (error: Exception) {
+                    failure = error.message ?: "سرور در دسترس نیست."
+                }
             }
             updateUi {
                 onlineMode = if (connected.isBlank()) "STANDBY" else connected
-                status = if (connected.isBlank()) "برای اتصال اولیه یک‌بار جفت‌سازی لازم است." else "اتصال $connected خودکار بازیابی شد."
+                status = when {
+                    connected == "LOCAL" -> "اتصال محلی بازیابی شد."
+                    connected == "CLOUD" && aiReady -> "سرور و موتور هوش مصنوعی آماده‌اند."
+                    connected == "CLOUD" -> "سرور وصل است، اما موتور هوش مصنوعی هنوز تنظیم نشده."
+                    else -> "اتصال برقرار نشد: " + failure
+                }
             }
         }
     }
@@ -310,6 +341,7 @@ private fun AriaApp(
             voiceController.destroy()
             tts.shutdown()
             executor.shutdownNow()
+            mediaExecutor.shutdownNow()
         }
     }
 
@@ -327,56 +359,41 @@ private fun AriaApp(
         }
     }
 
-    fun pairCloud() {
-        if (cloudUrl.isBlank()) {
-            status = "آدرس Cloud را وارد کن."
-            return
+    fun guestToken(forceRegister: Boolean = false): String {
+        val saved = prefs.getString("cloud_token", "") ?: ""
+        if (!forceRegister && saved.isNotBlank()) return saved
+        val installId = prefs.getString("guest_install_id", null)
+            ?: UUID.randomUUID().toString().also {
+                prefs.edit().putString("guest_install_id", it).apply()
+            }
+        if (cloudUrl.isBlank()) throw IllegalStateException("آدرس سرور خالی است.")
+        val token = api.guest(cloudUrl.trimEnd('/'), installId, "ARIA Android")
+        prefs.edit()
+            .putString("cloud_url", cloudUrl.trimEnd('/'))
+            .putString("cloud_token", token)
+            .apply()
+        updateUi {
+            cloudToken = token
+            onlineMode = "CLOUD"
+            status = "اتصال مهمان برقرار شد."
         }
-        if (pairingCode.filter { it.isDigit() }.length != 6) {
-            status = "کد جفت‌سازی باید دقیقاً ۶ رقم باشد."
-            return
-        }
+        return token
+    }
+
+    fun reconnectCloud() {
+        status = "در حال اتصال خودکار به سرور ARIA…"
         executor.execute {
             try {
-                val token = api.pair(cloudUrl, pairingCode, "ARIA Android Cloud")
-                prefs.edit()
-                    .putString("cloud_url", cloudUrl.trimEnd('/'))
-                    .putString("cloud_token", token)
-                    .apply()
+                val token = guestToken(forceRegister = true)
+                val server = api.status(cloudUrl.trimEnd('/'))
+                val aiReady = server.optBoolean("cloud_ai_configured", false) || server.optBoolean("ollama", false)
                 updateUi {
                     cloudToken = token
                     onlineMode = "CLOUD"
-                    status = "Cloud متصل شد"
+                    status = if (aiReady) "سرور و موتور هوش مصنوعی آماده‌اند." else "سرور در دسترس است، اما مدل هوش مصنوعی هنوز تنظیم نشده."
                 }
             } catch (error: Exception) {
-                updateUi { status = "Cloud: " + friendlyError(error) }
-            }
-        }
-    }
-
-    fun pairLocal() {
-        if (localUrl.isBlank()) {
-            status = "آدرس لپ‌تاپ را وارد کن"
-            return
-        }
-        if (pairingCode.filter { it.isDigit() }.length != 6) {
-            status = "کد ۶ رقمی ترمینال سرور لازم است"
-            return
-        }
-        executor.execute {
-            try {
-                val token = api.pair(localUrl, pairingCode, "ARIA Android Local")
-                prefs.edit()
-                    .putString("local_url", localUrl.trimEnd('/'))
-                    .putString("local_token", token)
-                    .apply()
-                updateUi {
-                    localToken = token
-                    onlineMode = "LOCAL"
-                    status = "لپ‌تاپ متصل شد"
-                }
-            } catch (error: Exception) {
-                updateUi { status = "لپ‌تاپ: " + friendlyError(error) }
+                updateUi { onlineMode = "STANDBY"; status = "اتصال ناموفق: " + friendlyError(error) }
             }
         }
     }
@@ -384,35 +401,93 @@ private fun AriaApp(
     fun sendMessage() {
         val prompt = message.trim()
         if (prompt.isBlank()) return
+        val mode = composerMode
         messages.add(ChatItem(true, prompt))
         message = ""
+        composerMode = "chat"
+
+        if (mode == "image") {
+            updateUi { status = "درخواست ساخت تصویر ارسال شد؛ این قابلیت ممکن است اعتبار پولی مصرف کند." }
+            mediaExecutor.execute {
+                try {
+                    val token = guestToken()
+                    val image = api.generateImage(cloudUrl.trimEnd('/'), token, prompt)
+                    val base64 = image.optString("image_base64")
+                    if (base64.isBlank()) error("پاسخ تصویر خالی بود.")
+                    updateUi {
+                        messages.add(ChatItem(false, "تصویر تولیدشده توسط ARIA", imageBase64 = base64))
+                        status = "تصویر آماده شد."
+                    }
+                } catch (error: Exception) {
+                    updateUi { messages.add(ChatItem(false, friendlyError(error))); status = "ساخت تصویر انجام نشد." }
+                }
+            }
+            return
+        }
+
+        if (mode == "video") {
+            updateUi { status = "درخواست ساخت کلیپ ارسال شد؛ تولید ویدئو ممکن است هزینه داشته باشد." }
+            mediaExecutor.execute {
+                try {
+                    val token = guestToken()
+                    val job = api.generateVideo(cloudUrl.trimEnd('/'), token, prompt)
+                    val jobId = job.optString("id")
+                    updateUi { messages.add(ChatItem(false, "درخواست ساخت کلیپ ثبت شد؛ در حال تولید…")) }
+                    var resultUrl = ""
+                    var finalState = "pending"
+                    var lastError = ""
+                    for (attempt in 0 until 18) {
+                        Thread.sleep(10000)
+                        val result = api.videoStatus(cloudUrl.trimEnd('/'), token, jobId)
+                        finalState = result.optString("status", "unknown")
+                        lastError = result.optString("error", "")
+                        val urls = result.optJSONArray("video_urls")
+                        if (urls != null && urls.length() > 0) resultUrl = urls.optString(0, "")
+                        if (resultUrl.isNotBlank() || finalState in setOf("failed", "cancelled", "expired")) break
+                    }
+                    updateUi {
+                        if (resultUrl.isNotBlank()) {
+                            messages.add(ChatItem(false, "کلیپ آماده است. برای نمایش روی دکمه زیر بزن.", videoUrl = resultUrl))
+                            status = "کلیپ آماده شد."
+                        } else {
+                            messages.add(ChatItem(false, if (lastError.isNotBlank()) lastError else "وضعیت ساخت کلیپ: $finalState."))
+                            status = "ساخت کلیپ کامل نشد یا زمان بیشتری می‌خواهد."
+                        }
+                    }
+                } catch (error: Exception) {
+                    updateUi { messages.add(ChatItem(false, friendlyError(error))); status = "ساخت کلیپ انجام نشد." }
+                }
+            }
+            return
+        }
 
         executor.execute {
             try {
                 var response: AriaResponse? = null
                 var source = ""
-
-                // Local-first: keeps chat usable on the home LAN if public internet is blocked.
                 if (localToken.isNotBlank() && localUrl.isNotBlank()) {
                     try {
                         response = api.chat(localUrl, localToken, prompt)
                         source = "Local"
-                    } catch (_: Exception) {
-                    }
+                    } catch (_: Exception) { }
                 }
-                if (response == null && cloudToken.isNotBlank() && cloudUrl.isNotBlank()) {
-                    response = api.chat(cloudUrl, cloudToken, prompt)
+                if (response == null && cloudUrl.isNotBlank()) {
+                    var token = guestToken()
+                    try {
+                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt)
+                    } catch (firstError: Exception) {
+                        if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
+                            token = guestToken(forceRegister = true)
+                            response = api.chat(cloudUrl.trimEnd('/'), token, prompt)
+                        } else {
+                            throw firstError
+                        }
+                    }
                     source = "Cloud"
                 }
-                if (response == null) {
-                    error("اتصال به ARIA نیست. اول جفت‌سازی کن. اگر ollama_unavailable دیدی روی لپ‌تاپ: ollama serve")
-                }
-
+                if (response == null) error("سرور هوش مصنوعی پاسخ نداد. اتصال و تنظیمات سرور را بررسی کن.")
                 val result = response!!
-                val approval = if (result.requiresApproval) {
-                    "\n\nنیازمند تأیید مالک · ${result.permissionLevel}"
-                } else ""
-
+                val approval = if (result.requiresApproval) "\n\nنیازمند تأیید مالک · ${result.permissionLevel}" else ""
                 updateUi {
                     onlineMode = source.uppercase(Locale.ROOT)
                     status = "پاسخ از $source"
@@ -421,7 +496,7 @@ private fun AriaApp(
                 }
             } catch (error: Exception) {
                 updateUi {
-                    status = "قطع ارتباط"
+                    status = "پاسخی دریافت نشد"
                     messages.add(ChatItem(false, friendlyError(error)))
                 }
             }
@@ -474,11 +549,31 @@ private fun AriaApp(
                 }
             }
 
-            Box(
-                modifier = Modifier.fillMaxWidth().height(190.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
+            if (messages.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
+                    Spacer(Modifier.height(20.dp))
+                    Text("سلام! من آریا هستم.", color = Color(0xFFF4F7FF), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    Text("امروز چه چیزی را با هم حل کنیم؟", color = Color(0xFFAAB7D0))
+                    Spacer(Modifier.height(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { message = "یک برنامهٔ یادگیری هوش مصنوعی برای من طراحی کن." }) { Text("یادگیری AI") }
+                        OutlinedButton(onClick = { message = "این ایده را به یک پروژهٔ عملی تبدیل کن." }) { Text("ایده‌پردازی") }
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("گفت‌وگو", color = Color(0xFFE8EEFC), fontWeight = FontWeight.SemiBold)
+                    Text("گفت‌وگوی فارسی با ARIA", color = Color(0xFF8F9BB5), style = MaterialTheme.typography.labelSmall)
+                }
             }
 
             Column(
@@ -494,20 +589,12 @@ private fun AriaApp(
                 if (voiceStatus != "آماده") Text(voiceStatus, color = Color(0xFF9DABCA), style = MaterialTheme.typography.labelSmall)
             }
 
-            if (messages.isEmpty()) {
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("از کجا شروع کنیم؟", color = Color(0xFFF1F4FF), style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(6.dp))
-                    Text("سؤالت را بنویس یا با ARIA صحبت کن.", color = Color(0xFF8F9BB5))
-                }
-            } else {
+            if (messages.isNotEmpty()) {
                 LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                        .background(Color(0x9910192B)).padding(12.dp),
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0x6610192B))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(messages) { item ->
@@ -516,17 +603,58 @@ private fun AriaApp(
                             horizontalArrangement = if (item.owner) Arrangement.End else Arrangement.Start
                         ) {
                             Column(
-                                modifier = Modifier.fillMaxWidth(0.88f)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (item.owner) Color(0xFF183348) else Color(0xFF151D32))
-                                    .padding(12.dp)
+                                modifier = Modifier.fillMaxWidth(if (item.owner) 0.88f else 0.96f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(if (item.owner) Color(0xFF183348) else Color(0xFF111B2D))
+                                    .padding(13.dp)
                             ) {
-                                Text(if (item.owner) "تو" else "ARIA", color = if (item.owner) Color(0xFF70E6F7) else Color(0xFFB5A5FF), style = MaterialTheme.typography.labelSmall)
-                                Spacer(Modifier.height(4.dp))
+                                Text(if (item.owner) "شما" else "ARIA", color = if (item.owner) Color(0xFF70E6F7) else Color(0xFFB5A5FF), style = MaterialTheme.typography.labelSmall)
+                                Spacer(Modifier.height(5.dp))
                                 Text(item.text, color = Color(0xFFE8EEFC))
+                                val imageBitmap = remember(item.imageBase64) {
+                                    item.imageBase64?.let { encoded ->
+                                        runCatching {
+                                            val bytes = Base64.decode(encoded, Base64.DEFAULT)
+                                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                                        }.getOrNull()
+                                    }
+                                }
+                                if (imageBitmap != null) {
+                                    Spacer(Modifier.height(10.dp))
+                                    Image(
+                                        bitmap = imageBitmap,
+                                        contentDescription = "تصویر تولیدشده توسط ARIA",
+                                        modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(12.dp))
+                                    )
+                                }
+                                if (!item.videoUrl.isNullOrBlank()) {
+                                    Spacer(Modifier.height(10.dp))
+                                    OutlinedButton(onClick = {
+                                        runCatching {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.videoUrl)))
+                                        }.onFailure { status = "بازکردن کلیپ ناموفق بود." }
+                                    }, modifier = Modifier.fillMaxWidth()) { Text("▶ نمایش کلیپ") }
+                                }
                             }
                         }
                     }
+                }
+            } else {
+                Spacer(Modifier.weight(0.08f))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(onClick = { composerMode = "chat" }, modifier = Modifier.weight(1f)) {
+                    Text(if (composerMode == "chat") "✓ چت" else "چت")
+                }
+                OutlinedButton(onClick = { composerMode = "image"; status = "ساخت تصویر: ممکن است اعتبار پولی لازم باشد." }, modifier = Modifier.weight(1f)) {
+                    Text(if (composerMode == "image") "✓ تصویر" else "تصویر")
+                }
+                OutlinedButton(onClick = { composerMode = "video"; status = "ساخت کلیپ: معمولاً پولی است و ممکن است چند دقیقه زمان ببرد." }, modifier = Modifier.weight(1f)) {
+                    Text(if (composerMode == "video") "✓ کلیپ" else "کلیپ")
                 }
             }
 
@@ -551,7 +679,7 @@ private fun AriaApp(
                     value = message,
                     onValueChange = { message = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("پیامت را برای ARIA بنویس…") },
+                    placeholder = { Text(when (composerMode) { "image" -> "توصیف تصویر دلخواه…"; "video" -> "توصیف کلیپ دلخواه…"; else -> "پیامت را برای ARIA بنویس…" }) },
                     singleLine = false,
                     maxLines = 4,
                     shape = RoundedCornerShape(18.dp)
@@ -561,6 +689,7 @@ private fun AriaApp(
                     modifier = Modifier.size(48.dp),
                     shape = CircleShape,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    enabled = message.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6D7BFF), contentColor = Color.White)
                 ) { Text("➤") }
             }
@@ -570,32 +699,35 @@ private fun AriaApp(
     if (showSettings) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showSettings = false },
-            title = { Text("اتصال و تنظیمات ARIA") },
+            title = { Text("تنظیمات ARIA") },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("اتصال محلی به لپ‌تاپ", color = AriaCyan)
-                    OutlinedTextField(value = localUrl, onValueChange = { localUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("آدرس لپ‌تاپ") }, singleLine = true)
-                    OutlinedButton(onClick = { pairLocal() }, modifier = Modifier.fillMaxWidth()) { Text("جفت‌سازی با لپ‌تاپ") }
-                    Text("اتصال ابری", color = AriaCyan)
-                    OutlinedTextField(value = cloudUrl, onValueChange = { cloudUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("آدرس Cloud") }, singleLine = true)
-                    OutlinedButton(onClick = { pairCloud() }, modifier = Modifier.fillMaxWidth()) { Text("جفت‌سازی با Cloud") }
+                    Text("اتصال خودکار مهمان", color = AriaCyan, fontWeight = FontWeight.SemiBold)
+                    Text("کد جفت‌سازی حذف شده است. ARIA برای هر نصب، اتصال مهمان جداگانه می‌سازد.", color = AriaMuted)
                     OutlinedTextField(
-                        value = pairingCode,
-                        onValueChange = { pairingCode = it.filter { ch -> ch.isDigit() }.take(6) },
+                        value = cloudUrl,
+                        onValueChange = { cloudUrl = it.trim() },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("کد جفت‌سازی ۶ رقمی") },
+                        label = { Text("آدرس سرور ARIA") },
                         singleLine = true
                     )
-                    OutlinedButton(onClick = requestMicPermission, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن مجوز میکروفون") }
-                    Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = {
+                            prefs.edit().putString("cloud_url", cloudUrl.trimEnd('/')).apply()
+                            reconnectCloud()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("اتصال مجدد به سرور") }
+                    OutlinedButton(onClick = requestMicPermission, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن میکروفون") }
                     OutlinedButton(
                         onClick = { showSettings = false; showFeedback = true },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("ارسال نظر و پیشنهاد") }
-                    OutlinedButton(onClick = { showPackages = true }, modifier = Modifier.fillMaxWidth()) { Text("اطلاعات بسته‌ها") }
+                    Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Text("چت رایگان به سهمیهٔ مدل وابسته است. ساخت تصویر و کلیپ ممکن است هزینه داشته باشد و فقط پس از فعال‌سازی در سرور کار می‌کند.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = { Button(onClick = { showSettings = false }) { Text("بستن") } },
@@ -638,7 +770,7 @@ private fun AriaApp(
                         minLines = 4,
                         maxLines = 7
                     )
-                    Text("برای ثبت نظر، اپ باید به سرور ARIA جفت شده باشد.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Text("برای ثبت نظر، اتصال اینترنت و دسترسی به سرور ARIA لازم است.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = {
@@ -649,7 +781,7 @@ private fun AriaApp(
                     val urlToUse = if (localToken.isNotBlank()) localUrl else cloudUrl
                     when {
                         messageToSend.length < 3 -> status = "پیام باید حداقل ۳ نویسه داشته باشد."
-                        tokenToUse.isBlank() -> status = "ابتدا ARIA را از تنظیمات به سرور جفت‌سازی کن."
+                        tokenToUse.isBlank() -> status = "ابتدا اتصال خودکار به سرور را از تنظیمات امتحان کن."
                         else -> executor.execute {
                             try {
                                 api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.4.0-beta1")
@@ -681,7 +813,7 @@ private fun AriaApp(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("نسخهٔ آزمایشی ARIA", color = AriaCyan)
-                    Text("پرداخت آنلاین در برنامه فعال نیست. برای این نسخه هیچ پرداختی انجام نده.")
+                    Text("پرداخت آنلاین هنوز فعال نیست. این نسخه آزمایشی است؛ برای قابلیت‌های ابری یا رسانه‌های پولی، تا راه‌اندازی پرداخت از کاربران پول نگیر.")
                 }
             },
             confirmButton = { Button(onClick = { showPackages = false }) { Text("متوجه شدم") } },
