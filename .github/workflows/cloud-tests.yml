@@ -34,4 +34,6 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q cloud tests
       - name: Run cloud tests
+        env:
+          PYTHONPATH: .
         run: pytest -q
