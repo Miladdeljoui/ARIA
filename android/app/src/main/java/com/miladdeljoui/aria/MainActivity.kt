@@ -402,6 +402,7 @@ private fun AriaApp(
         val prompt = message.trim()
         if (prompt.isBlank()) return
         val mode = composerMode
+        val history = messages.takeLast(12).map { item -> Pair(if (item.owner) "user" else "assistant", item.text) }
         messages.add(ChatItem(true, prompt))
         message = ""
         composerMode = "chat"
@@ -467,14 +468,14 @@ private fun AriaApp(
                 var source = ""
                 if (localToken.isNotBlank() && localUrl.isNotBlank()) {
                     try {
-                        response = api.chat(localUrl, localToken, prompt)
+                        response = api.chat(localUrl, localToken, prompt, history)
                         source = "Local"
                     } catch (_: Exception) { }
                 }
                 if (response == null && cloudUrl.isNotBlank()) {
                     var token = guestToken()
                     try {
-                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt)
+                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
                     } catch (firstError: Exception) {
                         if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
                             token = guestToken(forceRegister = true)
