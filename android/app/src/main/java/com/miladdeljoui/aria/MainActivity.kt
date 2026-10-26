@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -439,7 +440,7 @@ private fun AriaApp(
             )
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxSize().imePadding().padding(horizontal = 18.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
@@ -453,11 +454,11 @@ private fun AriaApp(
                             .background(Brush.radialGradient(listOf(Color(0xFF72F7FF), Color(0xFF7557FF), Color(0xFF11152D)))),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("✦", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                        Text("A", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         Text("ARIA", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F7FF))
-                        Text("YOUR COSMIC AI", color = Color(0xFF7C8AA8), style = MaterialTheme.typography.labelSmall)
+                        Text("دستیار هوشمند فارسی", color = Color(0xFF9AB6D8), style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
