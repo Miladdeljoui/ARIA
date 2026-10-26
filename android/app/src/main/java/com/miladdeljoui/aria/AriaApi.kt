@@ -59,7 +59,9 @@ class AriaApi {
         if (responseCode !in 200..299) {
             val parsed = runCatching { JSONObject(raw) }.getOrNull()
             val detail = parsed?.optString("detail").orEmpty()
-            val errorCode = parsed?.optString("error", "http_error") ?: "http_error"
+            val errorCode = parsed?.optString("error")?.takeIf { it.isNotBlank() }
+                ?: detail.takeIf { it.isNotBlank() }
+                ?: "http_error"
             val message = parsed?.optString("message")?.takeIf { it.isNotBlank() }
                 ?: parsed?.optString("hint")?.takeIf { it.isNotBlank() }
                 ?: when (detail.ifBlank { errorCode }) {
