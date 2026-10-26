@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cloud import aria_cloud as api
+from app import app as paas_app
 
 
 @pytest.fixture()
@@ -20,6 +21,12 @@ def guest(client, client_id="test-installation-123456"):
     )
     assert response.status_code == 200
     return response.json()["token"]
+
+
+def test_platform_entrypoint_starts_without_pairing_secret():
+    response = TestClient(paas_app).get("/status")
+    assert response.status_code == 200
+    assert response.json()["assistant"] == "ARIA"
 
 
 def test_home_and_status_are_available(client, monkeypatch):
