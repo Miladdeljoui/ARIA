@@ -16,7 +16,7 @@ OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 # Configure an OpenAI-compatible hosted inference endpoint to run ARIA without a laptop.
 # Example endpoint: https://openrouter.ai/api/v1/chat/completions
 ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", "https://openrouter.ai/api/v1/chat/completions").strip()
-ARIA_API_KEY = os.getenv("ARIA_API_KEY", os.getenv("OPENROUTER_API_KEY", "")).strip()
+ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEY", "").strip()
 OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().lower()
 TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
 MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
