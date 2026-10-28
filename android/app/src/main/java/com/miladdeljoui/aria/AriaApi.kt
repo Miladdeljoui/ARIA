@@ -28,7 +28,7 @@ class AriaApi {
         )
 
         connection.requestMethod = method
-        connection.connectTimeout = 8000
+        connection.connectTimeout = 45000
         connection.readTimeout = 240000
         connection.setRequestProperty(
             "Content-Type",
