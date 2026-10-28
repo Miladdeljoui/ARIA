@@ -262,6 +262,9 @@ private fun AriaApp(
     var cloudToken by remember {
         mutableStateOf(prefs.getString("cloud_token", "") ?: "")
     }
+    var pollinationsKey by remember {
+        mutableStateOf(prefs.getString("pollinations_key", "") ?: "")
+    }
     var localToken by remember {
         mutableStateOf(prefs.getString("local_token", "") ?: "")
     }
@@ -296,41 +299,26 @@ private fun AriaApp(
     }
 
     LaunchedEffect(Unit) {
-        status = "در حال اتصال خودکار به سرور…"
+        status = "در حال بررسی موتور رایگان گفت‌وگو…"
         executor.execute {
-            var connected = ""
-            var aiReady = false
-            var failure = ""
-            if (localUrl.isNotBlank() && localToken.isNotBlank()) {
-                try { api.subscription(localUrl, localToken); connected = "LOCAL" } catch (_: Exception) { }
-            }
-            if (connected.isBlank() && cloudUrl.isNotBlank()) {
-                try {
-                    val installId = prefs.getString("guest_install_id", null)
-                        ?: UUID.randomUUID().toString().also {
-                            prefs.edit().putString("guest_install_id", it).apply()
-                        }
-                    val token = api.guest(cloudUrl.trimEnd('/'), installId, "ARIA Android")
-                    prefs.edit()
-                        .putString("cloud_url", cloudUrl.trimEnd('/'))
-                        .putString("cloud_token", token)
-                        .apply()
-                    api.subscription(cloudUrl.trimEnd('/'), token)
-                    val server = api.status(cloudUrl.trimEnd('/'))
-                    aiReady = server.optBoolean("cloud_ai_configured", false) || server.optBoolean("ollama", false)
-                    connected = "CLOUD"
-                    updateUi { cloudToken = token }
-                } catch (error: Exception) {
-                    failure = error.message ?: "سرور در دسترس نیست."
+            try {
+                val catalog = api.freeProviderStatus()
+                val models = catalog.optJSONArray("data")
+                val hasModel = models != null && (0 until models.length()).any {
+                    models.optJSONObject(it)?.optString("id") == "gpt-oss-20b"
                 }
-            }
-            updateUi {
-                onlineMode = if (connected.isBlank()) "STANDBY" else connected
-                status = when {
-                    connected == "LOCAL" -> "اتصال محلی بازیابی شد."
-                    connected == "CLOUD" && aiReady -> "سرور و موتور هوش مصنوعی آماده‌اند."
-                    connected == "CLOUD" -> "سرور وصل است، اما موتور هوش مصنوعی هنوز تنظیم نشده."
-                    else -> "اتصال برقرار نشد: " + failure
+                updateUi {
+                    onlineMode = if (hasModel) "AI FREE" else "AI"
+                    status = if (hasModel) {
+                        "موتور گفت‌وگوی مستقیم آماده است. محدودیت ناشناس: حدود ۲ درخواست در دقیقه."
+                    } else {
+                        "سرویس پاسخ داد؛ مدل پیش‌فرض ممکن است در دسترس نباشد."
+                    }
+                }
+            } catch (error: Exception) {
+                updateUi {
+                    onlineMode = "STANDBY"
+                    status = "بررسی سرویس مستقیم ناموفق بود؛ هنگام ارسال پیام دوباره تلاش می‌کنیم."
                 }
             }
         }
@@ -411,10 +399,7 @@ private fun AriaApp(
             updateUi { status = "درخواست ساخت تصویر ارسال شد؛ این قابلیت ممکن است اعتبار پولی مصرف کند." }
             mediaExecutor.execute {
                 try {
-                    val token = guestToken()
-                    val image = api.generateImage(cloudUrl.trimEnd('/'), token, prompt)
-                    val base64 = image.optString("image_base64")
-                    if (base64.isBlank()) error("پاسخ تصویر خالی بود.")
+                    val base64 = api.generatePollinationsImage(prompt, pollinationsKey)
                     updateUi {
                         messages.add(ChatItem(false, "تصویر تولیدشده توسط ARIA", imageBase64 = base64))
                         status = "تصویر آماده شد."
@@ -427,33 +412,13 @@ private fun AriaApp(
         }
 
         if (mode == "video") {
-            updateUi { status = "درخواست ساخت کلیپ ارسال شد؛ تولید ویدئو ممکن است هزینه داشته باشد." }
+            updateUi { status = "درخواست کلیپ به Pollinations ارسال شد؛ ممکن است اعتبار مصرف شود." }
             mediaExecutor.execute {
                 try {
-                    val token = guestToken()
-                    val job = api.generateVideo(cloudUrl.trimEnd('/'), token, prompt)
-                    val jobId = job.optString("id")
-                    updateUi { messages.add(ChatItem(false, "درخواست ساخت کلیپ ثبت شد؛ در حال تولید…")) }
-                    var resultUrl = ""
-                    var finalState = "pending"
-                    var lastError = ""
-                    for (attempt in 0 until 18) {
-                        Thread.sleep(10000)
-                        val result = api.videoStatus(cloudUrl.trimEnd('/'), token, jobId)
-                        finalState = result.optString("status", "unknown")
-                        lastError = result.optString("error", "")
-                        val urls = result.optJSONArray("video_urls")
-                        if (urls != null && urls.length() > 0) resultUrl = urls.optString(0, "")
-                        if (resultUrl.isNotBlank() || finalState in setOf("failed", "cancelled", "expired")) break
-                    }
+                    val videoUri = api.generatePollinationsVideo(prompt, pollinationsKey, context)
                     updateUi {
-                        if (resultUrl.isNotBlank()) {
-                            messages.add(ChatItem(false, "کلیپ آماده است. برای نمایش روی دکمه زیر بزن.", videoUrl = resultUrl))
-                            status = "کلیپ آماده شد."
-                        } else {
-                            messages.add(ChatItem(false, if (lastError.isNotBlank()) lastError else "وضعیت ساخت کلیپ: $finalState."))
-                            status = "ساخت کلیپ کامل نشد یا زمان بیشتری می‌خواهد."
-                        }
+                        messages.add(ChatItem(false, "کلیپ آماده شد. برای پخش روی دکمه بزن.", videoUrl = videoUri))
+                        status = "کلیپ آماده شد."
                     }
                 } catch (error: Exception) {
                     updateUi { messages.add(ChatItem(false, friendlyError(error))); status = "ساخت کلیپ انجام نشد." }
@@ -466,27 +431,33 @@ private fun AriaApp(
             try {
                 var response: AriaResponse? = null
                 var source = ""
-                if (localToken.isNotBlank() && localUrl.isNotBlank()) {
-                    try {
-                        response = api.chat(localUrl, localToken, prompt, history)
-                        source = "Local"
-                    } catch (_: Exception) { }
+                var directError: Exception? = null
+                try {
+                    response = api.freeChat(prompt, history)
+                    source = "OVH رایگان"
+                } catch (error: Exception) {
+                    directError = error
                 }
                 if (response == null && cloudUrl.isNotBlank()) {
-                    var token = guestToken()
                     try {
-                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
-                    } catch (firstError: Exception) {
-                        if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
-                            token = guestToken(forceRegister = true)
-                            response = api.chat(cloudUrl.trimEnd('/'), token, prompt)
-                        } else {
-                            throw firstError
+                        var token = guestToken()
+                        try {
+                            response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
+                        } catch (firstError: Exception) {
+                            if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
+                                token = guestToken(forceRegister = true)
+                                response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
+                            } else {
+                                throw firstError
+                            }
                         }
+                        source = "سرور پشتیبان"
+                    } catch (fallbackError: Exception) {
+                        val first = directError?.message?.takeIf { it.isNotBlank() } ?: "سرویس رایگان پاسخ نداد."
+                        throw IllegalStateException("$first\nسرور پشتیبان هم در دسترس نیست: ${fallbackError.message ?: "خطای ارتباط"}")
                     }
-                    source = "Cloud"
                 }
-                if (response == null) error("سرور هوش مصنوعی پاسخ نداد. اتصال و تنظیمات سرور را بررسی کن.")
+                if (response == null) throw (directError ?: IllegalStateException("مدل هوش مصنوعی پاسخ نداد."))
                 val result = response!!
                 val approval = if (result.requiresApproval) "\n\nنیازمند تأیید مالک · ${result.permissionLevel}" else ""
                 updateUi {
@@ -640,7 +611,10 @@ private fun AriaApp(
                                     Spacer(Modifier.height(10.dp))
                                     OutlinedButton(onClick = {
                                         runCatching {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.videoUrl)))
+                                            context.startActivity(
+                                                Intent(Intent.ACTION_VIEW, Uri.parse(item.videoUrl))
+                                                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            )
                                         }.onFailure { status = "بازکردن کلیپ ناموفق بود." }
                                     }, modifier = Modifier.fillMaxWidth()) { Text("▶ نمایش کلیپ") }
                                 }
@@ -714,8 +688,8 @@ private fun AriaApp(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("اتصال خودکار مهمان", color = AriaCyan, fontWeight = FontWeight.SemiBold)
-                    Text("کد جفت‌سازی حذف شده است. ARIA برای هر نصب، اتصال مهمان جداگانه می‌سازد.", color = AriaMuted)
+                    Text("چت مستقیم و رایگان", color = AriaCyan, fontWeight = FontWeight.SemiBold)
+                    Text("چت از موتور رایگان مستقل از سرور ARIA استفاده می‌کند. کد شش‌رقمی جفت‌سازی لازم نیست.", color = AriaMuted)
                     OutlinedTextField(
                         value = cloudUrl,
                         onValueChange = { cloudUrl = it.trim() },
@@ -730,6 +704,27 @@ private fun AriaApp(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("اتصال مجدد به سرور") }
+                    OutlinedTextField(
+                        value = pollinationsKey,
+                        onValueChange = {
+                            pollinationsKey = it.trim()
+                            prefs.edit().putString("pollinations_key", pollinationsKey).apply()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("کلید Pollinations برای تصویر و کلیپ") },
+                        placeholder = { Text("sk_…") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://enter.pollinations.ai")))
+                            }.onFailure { status = "بازکردن صفحهٔ دریافت کلید ناموفق بود." }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("دریافت کلید تصویر و کلیپ") }
+                    Text("ساخت تصویر و کلیپ به کلید Pollinations و اعتبار فعال نیاز دارد؛ رایگانِ نامحدود نیست.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = requestMicPermission, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن میکروفون") }
                     OutlinedButton(
                         onClick = { showSettings = false; showFeedback = true },
