@@ -69,8 +69,6 @@ class AriaApi {
                         "مدل هوش مصنوعی ابری هنوز تنظیم نشده است."
                     "ai_provider_unavailable_or_invalid_response" ->
                         "سرویس هوش مصنوعی پاسخ نداد؛ تنظیمات مدل ابری را بررسی کنید."
-                    "invalid_pairing_code" ->
-                        "کد جفت‌سازی اشتباه است. کد ۶ رقمی را بررسی کنید."
                     "unauthorized" ->
                         "دسترسی این دستگاه معتبر نیست. یک بار اتصال خودکار را دوباره امتحان کن."
                     "guest_registration_limit" ->
@@ -144,30 +142,6 @@ class AriaApi {
             path = "/media/video/" + java.net.URLEncoder.encode(jobId, "UTF-8"),
             token = token
         )
-    }
-
-    fun pair(
-        baseUrl: String,
-        code: String,
-        deviceName: String
-    ): String {
-        val cleanCode = code.trim().filter { it.isDigit() }
-        if (cleanCode.length != 6) {
-            throw AriaException(
-                "invalid_pairing_code",
-                "کد جفت‌سازی باید دقیقاً ۶ رقم باشد."
-            )
-        }
-
-        val result = request(
-            method = "POST",
-            baseUrl = baseUrl,
-            path = "/pair",
-            body = JSONObject()
-                .put("code", cleanCode)
-                .put("device_name", deviceName)
-        )
-        return result.getString("token")
     }
 
     fun chat(
