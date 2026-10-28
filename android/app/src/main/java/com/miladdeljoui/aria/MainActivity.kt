@@ -576,7 +576,7 @@ private fun AriaApp(
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text("گفت‌وگو", color = Color(0xFFE8EEFC), fontWeight = FontWeight.SemiBold)
+                    Text("گفت‌وگو", color = AriaText, fontWeight = FontWeight.SemiBold)
                     Text("گفت‌وگوی فارسی با ARIA", color = Color(0xFF8F9BB5), style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -594,7 +594,7 @@ private fun AriaApp(
                     color = if (onlineMode == "STANDBY") Color(0xFFE5A080) else Color(0xFFB5C9B5),
                     fontWeight = FontWeight.Medium
                 )
-                Text(status, color = Color(0xFFADB9D0), style = MaterialTheme.typography.bodySmall)
+                Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                 if (voiceStatus != "آماده") Text(voiceStatus, color = Color(0xFF9DABCA), style = MaterialTheme.typography.labelSmall)
             }
 
@@ -602,8 +602,8 @@ private fun AriaApp(
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0x6610192B))
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .background(Color.Transparent)
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(messages) { item ->
@@ -614,12 +614,12 @@ private fun AriaApp(
                             Column(
                                 modifier = Modifier.fillMaxWidth(if (item.owner) 0.88f else 0.96f)
                                     .clip(RoundedCornerShape(18.dp))
-                                    .background(if (item.owner) Color(0xFF183348) else Color(0xFF111B2D))
-                                    .padding(13.dp)
+                                    .background(if (item.owner) Color(0xFF2B2926) else Color.Transparent)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
                             ) {
                                 Text(if (item.owner) "شما" else "ARIA", color = if (item.owner) Color(0xFFE5A080) else Color(0xFFBAB2A8), style = MaterialTheme.typography.labelSmall)
                                 Spacer(Modifier.height(5.dp))
-                                Text(item.text, color = Color(0xFFE8EEFC))
+                                Text(item.text, color = AriaText)
                                 val imageBitmap = remember(item.imageBase64) {
                                     item.imageBase64?.let { encoded ->
                                         runCatching {
