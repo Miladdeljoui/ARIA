@@ -712,7 +712,7 @@ private fun AriaApp(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("کلید Pollinations برای تصویر و کلیپ") },
-                        placeholder = { Text("sk_…") },
+                        placeholder = { Text("App Key") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true
                     )
@@ -724,7 +724,7 @@ private fun AriaApp(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("دریافت کلید تصویر و کلیپ") }
-                    Text("ساخت تصویر و کلیپ به کلید Pollinations و اعتبار فعال نیاز دارد؛ رایگانِ نامحدود نیست.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Text("ساخت تصویر و کلیپ رایگانِ نامحدود نیست. برای استفادهٔ شخصی فقط App Key مجاز را وارد کن؛ Secret Key محرمانه را در اپ یا APK عمومی قرار نده.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = requestMicPermission, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن میکروفون") }
                     OutlinedButton(
                         onClick = { showSettings = false; showFeedback = true },
