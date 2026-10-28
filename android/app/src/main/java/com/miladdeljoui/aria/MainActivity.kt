@@ -793,7 +793,7 @@ private fun AriaApp(
                         tokenToUse.isBlank() -> status = "ابتدا اتصال خودکار به سرور را از تنظیمات امتحان کن."
                         else -> executor.execute {
                             try {
-                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.4.0-beta1")
+                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.5.0-beta1")
                                 updateUi {
                                     status = "نظر تو ثبت شد؛ ممنون از همراهی‌ات!"
                                     feedbackText = ""
