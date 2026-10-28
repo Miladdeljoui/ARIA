@@ -8,7 +8,8 @@ import java.util.UUID
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-java.io.File
+import java.net.URLEncoder
+import java.io.File
 
 data class AriaResponse(
     val answer: String,
