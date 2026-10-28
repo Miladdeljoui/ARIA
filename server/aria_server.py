@@ -57,16 +57,6 @@ def sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def normalize_pairing_code(code: str) -> str:
-    # پشتیبانی از اعداد انگلیسی، فارسی و عربی که ممکن است از کیبورد موبایل ارسال شوند.
-    digit_map = str.maketrans(
-        "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩",
-        "01234567890123456789",
-    )
-    normalized = str(code).strip().translate(digit_map)
-    return "".join(ch for ch in normalized if ch in "0123456789")
-
-
 def load_state() -> dict:
     with LOCK:
         if not STATE_FILE.exists():
@@ -84,19 +74,20 @@ def save_state(state: dict) -> None:
 
 def ensure_state() -> dict:
     state = load_state()
-    if "pairing_code_hash" not in state:
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        state = {
-            "pairing_code_hash": sha256(code),
-            "pairing_code_display": code,
-            "created_at": int(time.time()),
-            "owner_name": OWNER_NAME,
-            "devices": [],
-        }
-        save_state(state)
+    changed = False
+    if not state:
+        state = {"owner_name": OWNER_NAME, "devices": []}
+        changed = True
+    # مهاجرت فایل‌های قدیمی: کد جفت‌سازی دیگر استفاده نمی‌شود.
+    if "pairing_code_hash" in state or "pairing_code_display" in state:
+        state.pop("pairing_code_hash", None)
+        state.pop("pairing_code_display", None)
+        changed = True
+    state.setdefault("owner_name", OWNER_NAME)
     state.setdefault("devices", [])
+    if changed:
+        save_state(state)
     return state
-
 
 def ollama_diagnose() -> dict:
     result = {"ok": False, "tags_ok": False, "models": [], "hint": ""}
@@ -359,6 +350,15 @@ class ARIAHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if self.path == "/subscription":
+            if not self.authorized():
+                send_json(self, 401, {"error": "unauthorized"})
+                return
+            send_json(
+                self, 200,
+                {"status": "local", "access_granted": True, "payment": "not_applicable"}
+            )
+            return
         if self.path == "/memory":
             if not self.authorized():
                 send_json(self, 401, {"error": "unauthorized"})
@@ -372,27 +372,32 @@ class ARIAHandler(BaseHTTPRequestHandler):
         send_json(self, 404, {"error": "not_found"})
 
     def do_POST(self) -> None:
-        if self.path == "/pair":
+        if self.path == "/guest":
             try:
                 data = self.read_json()
             except (ValueError, json.JSONDecodeError):
                 send_json(self, 400, {"error": "invalid_json"})
                 return
-            state = ensure_state()
-            code = normalize_pairing_code(str(data.get("code", "")))
-            if len(code) != 6 or sha256(code) != state.get("pairing_code_hash"):
-                send_json(self, 401, {"error": "invalid_pairing_code"})
+            client_id = str(data.get("client_id", "")).strip()
+            if len(client_id) < 16:
+                send_json(self, 400, {"error": "invalid_client_id"})
                 return
+            state = ensure_state()
             token = secrets.token_urlsafe(32)
+            # اتصال مهمان خودکار؛ سرور فقط هش توکن را نگه می‌دارد.
             state.setdefault("devices", []).append(
                 {
-                    "device_name": str(data.get("device_name", "Device"))[:80],
+                    "device_name": str(data.get("device_name", "Android guest"))[:80],
                     "token_hash": sha256(token),
                     "paired_at": int(time.time()),
+                    "client_id_hash": sha256(client_id),
                 }
             )
             save_state(state)
-            send_json(self, 200, {"assistant": "ARIA", "owner": OWNER_NAME, "token": token})
+            send_json(
+                self, 200,
+                {"assistant": "ARIA", "owner": OWNER_NAME, "token": token, "plan": "local_guest"}
+            )
             return
 
         if self.path == "/chat":
@@ -474,7 +479,7 @@ def main() -> None:
     print("ARIA Agent | self-learn + safe tools")
     print("=" * 56)
     print(f"Server: http://{local_ip()}:{PORT}")
-    print(f"Pairing: {state['pairing_code_display']}")
+    print("Guest connection: enabled (no pairing code)")
     print(f"Ollama: {'READY' if diag['ok'] else 'NEED ' + diag.get('hint','')}")
     print("Commands: صف یادگیری | خودآموزی روشن | جستجو گیت‌هاب | برنامه ساخت اپ")
     print("=" * 56)
