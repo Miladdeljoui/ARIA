@@ -233,7 +233,7 @@ class AriaApi {
         if (apiKey.isBlank()) {
             throw AriaException(
                 "pollinations_key_required",
-                "برای ساخت عکس یا کلیپ، ابتدا کلید Pollinations را در تنظیمات وارد کن. دریافت کلید: enter.pollinations.ai"
+                "برای ساخت عکس یا کلیپ، کلید App Key با پیشوند pk_ را در تنظیمات وارد کن. از کلید محرمانه sk_ داخل اپ استفاده نکن. دریافت کلید: enter.pollinations.ai"
             )
         }
         val connection = URL(url).openConnection() as HttpURLConnection
