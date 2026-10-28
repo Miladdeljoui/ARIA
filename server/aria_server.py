@@ -181,6 +181,48 @@ def handle_special_commands(prompt: str) -> str | None:
     return None
 
 
+def ask_openrouter(prompt: str) -> tuple[str, dict]:
+    """Use OpenRouter's free-model router when a server-side API key is configured."""
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("OPENROUTER_API_KEY is not configured on the server")
+    model = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip() or "openrouter/free"
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://github.com/Miladdeljoui/ARIA"),
+            "X-Title": "ARIA Persian Assistant",
+        },
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": f"{ARIA_PERSONA} پاسخ‌ها را به زبان کاربر و در صورت فارسی‌بودن به فارسی روان بده."},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+        },
+        timeout=90,
+    )
+    if not response.ok:
+        detail = response.text[:500]
+        raise requests.HTTPError(f"OpenRouter HTTP {response.status_code}: {detail}", response=response)
+    payload = response.json()
+    choices = payload.get("choices") or []
+    answer = choices[0].get("message", {}).get("content", "") if choices else ""
+    if not isinstance(answer, str) or not answer.strip():
+        raise requests.RequestException("OpenRouter returned an empty answer")
+    return answer.strip(), {
+        "level": "safe",
+        "requires_approval": False,
+        "reason": "openrouter_free_model",
+        "learning": False,
+        "provider": "openrouter",
+        "model": payload.get("model", model),
+    }
+
+
 def ask_local(prompt: str) -> tuple[str, dict]:
     special = handle_special_commands(prompt)
     if special is not None:
@@ -312,6 +354,8 @@ class ARIAHandler(BaseHTTPRequestHandler):
                     "learn_queue": q.get("topics", []),
                     "memory_items": len(MEMORY.search("", 100000)),
                     "paired_devices": len(state.get("devices", [])),
+                    "cloud_ai_configured": bool(os.getenv("OPENROUTER_API_KEY", "").strip()),
+                    "ai_provider": "openrouter" if os.getenv("OPENROUTER_API_KEY", "").strip() else "ollama",
                 },
             )
             return
@@ -372,17 +416,24 @@ class ARIAHandler(BaseHTTPRequestHandler):
                 MEMORY.add_conversation("assistant", special)
                 send_json(self, 200, {"answer": special, "model": "aria-tools", "learning": False})
                 return
-            if not diag["ok"]:
-                send_json(
-                    self,
-                    503,
-                    {"error": "ollama_unavailable", "message": diag.get("hint", "")},
-                )
-                return
             try:
-                answer, meta = ask_local(prompt)
-            except requests.RequestException as e:
-                send_json(self, 503, {"error": "ollama_request_failed", "message": str(e)})
+                if os.getenv("OPENROUTER_API_KEY", "").strip():
+                    answer, meta = ask_openrouter(prompt)
+                else:
+                    if not diag["ok"]:
+                        send_json(
+                            self,
+                            503,
+                            {
+                                "error": "ai_provider_not_configured",
+                                "message": "برای چت ابری رایگان، متغیر OPENROUTER_API_KEY را روی سرور تنظیم کن؛ یا Ollama محلی را فعال کن.",
+                                "ollama_hint": diag.get("hint", ""),
+                            },
+                        )
+                        return
+                    answer, meta = ask_local(prompt)
+            except (requests.RequestException, RuntimeError) as e:
+                send_json(self, 503, {"error": "ai_request_failed", "message": str(e)})
                 return
             MEMORY.add_conversation("user", prompt)
             MEMORY.add_conversation("assistant", answer)
