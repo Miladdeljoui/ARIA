@@ -698,7 +698,7 @@ private fun AriaApp(
                     modifier = Modifier.size(48.dp),
                     shape = CircleShape,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    enabled = message.isNotBlank(),
+                    enabled = message.isNotBlank() && onlineMode != "STANDBY",
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC87956), contentColor = Color.White)
                 ) { Text("➤") }
             }
@@ -793,7 +793,7 @@ private fun AriaApp(
                         tokenToUse.isBlank() -> status = "ابتدا اتصال خودکار به سرور را از تنظیمات امتحان کن."
                         else -> executor.execute {
                             try {
-                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.5.0-beta1")
+                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.5.1-beta1")
                                 updateUi {
                                     status = "نظر تو ثبت شد؛ ممنون از همراهی‌ات!"
                                     feedbackText = ""
