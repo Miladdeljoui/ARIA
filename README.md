@@ -88,6 +88,10 @@ ARIA is designed to assist its owner, not to bypass operating-system security or
 
 See docs/android-setup.md for the Android + laptop setup and docs/protection.md for the threat-awareness architecture.
 
+## Cloud deployment and free-model setup
+
+For a guided test deployment using OpenRouter's free-model router and Render, see [docs/cloud-setup-render.md](docs/cloud-setup-render.md). The API key must be set as a server secret; do not put it in the Android app. Render's free tier is for testing and may sleep when idle.
+
 ## Latest milestone
 
 The ARIA core now includes persistent memory, deterministic permission classification, online/local runtime selection, Android cloud-first fallback architecture, and automated Python tests.
