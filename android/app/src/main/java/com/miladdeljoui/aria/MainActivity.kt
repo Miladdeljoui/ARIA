@@ -514,7 +514,7 @@ private fun AriaApp(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF050914), Color(0xFF0A1024), Color(0xFF070B17))
+                    listOf(Color(0xFF171715), Color(0xFF1C1B19), Color(0xFF171715))
                 )
             )
     ) {
@@ -530,7 +530,7 @@ private fun AriaApp(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(
                         modifier = Modifier.size(42.dp).clip(CircleShape)
-                            .background(Brush.radialGradient(listOf(Color(0xFF72F7FF), Color(0xFF7557FF), Color(0xFF11152D)))),
+                            .background(Brush.radialGradient(listOf(Color(0xFFE9A17A), Color(0xFFC66A49), Color(0xFF34201A)))),
                         contentAlignment = Alignment.Center
                     ) {
                         Text("A", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
@@ -542,11 +542,12 @@ private fun AriaApp(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF122A35)).padding(horizontal = 10.dp, vertical = 7.dp)
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF2B2926)).padding(horizontal = 10.dp, vertical = 7.dp)
                     ) {
-                        Text(onlineMode, color = Color(0xFF6CF5D2), style = MaterialTheme.typography.labelSmall)
+                        Text(onlineMode, color = Color(0xFFE5A080), style = MaterialTheme.typography.labelSmall)
                     }
-                    OutlinedButton(onClick = { showSettings = true }) { Text("تنظیمات") }
+                    OutlinedButton(onClick = { messages.clear(); composerMode = "chat"; message = "" }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)) { Text("＋") }
+                    OutlinedButton(onClick = { showSettings = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)) { Text("تنظیمات") }
                 }
             }
 
@@ -556,7 +557,10 @@ private fun AriaApp(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    AvaCore(listening = voiceStatus.contains("شن") || voiceStatus.contains("پردازش"))
+                    Box(
+                        modifier = Modifier.size(56.dp).clip(CircleShape).background(Color(0xFF36271F)),
+                        contentAlignment = Alignment.Center
+                    ) { Text("✳", color = Color(0xFFE5A080), style = MaterialTheme.typography.headlineMedium) }
                     Spacer(Modifier.height(20.dp))
                     Text("سلام! من آریا هستم.", color = Color(0xFFF4F7FF), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
@@ -579,12 +583,16 @@ private fun AriaApp(
 
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xFF10182A)).padding(horizontal = 14.dp, vertical = 10.dp),
+                    .background(Color(0xFF22211F)).padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    if (onlineMode == "STANDBY") "هسته آماده است" else "هسته متصل است",
-                    color = Color(0xFF85F4E5), fontWeight = FontWeight.Medium
+                    when (onlineMode) {
+                        "STANDBY" -> "در انتظار اتصال"
+                        else -> "اتصال برقرار است"
+                    },
+                    color = if (onlineMode == "STANDBY") Color(0xFFE5A080) else Color(0xFFB5C9B5),
+                    fontWeight = FontWeight.Medium
                 )
                 Text(status, color = Color(0xFFADB9D0), style = MaterialTheme.typography.bodySmall)
                 if (voiceStatus != "آماده") Text(voiceStatus, color = Color(0xFF9DABCA), style = MaterialTheme.typography.labelSmall)
@@ -609,7 +617,7 @@ private fun AriaApp(
                                     .background(if (item.owner) Color(0xFF183348) else Color(0xFF111B2D))
                                     .padding(13.dp)
                             ) {
-                                Text(if (item.owner) "شما" else "ARIA", color = if (item.owner) Color(0xFF70E6F7) else Color(0xFFB5A5FF), style = MaterialTheme.typography.labelSmall)
+                                Text(if (item.owner) "شما" else "ARIA", color = if (item.owner) Color(0xFFE5A080) else Color(0xFFBAB2A8), style = MaterialTheme.typography.labelSmall)
                                 Spacer(Modifier.height(5.dp))
                                 Text(item.text, color = Color(0xFFE8EEFC))
                                 val imageBitmap = remember(item.imageBase64) {
@@ -661,7 +669,7 @@ private fun AriaApp(
 
             Row(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                    .background(Color(0xFF151D30)).padding(6.dp),
+                    .background(Color(0xFF242320)).padding(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -691,7 +699,7 @@ private fun AriaApp(
                     shape = CircleShape,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                     enabled = message.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6D7BFF), contentColor = Color.White)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC87956), contentColor = Color.White)
                 ) { Text("➤") }
             }
         }
