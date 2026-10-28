@@ -1,10 +1,14 @@
 package com.miladdeljoui.aria
 
+import android.content.Context
+import android.util.Base64
+import androidx.core.content.FileProvider
 import org.json.JSONArray
 import java.util.UUID
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+java.io.File
 
 data class AriaResponse(
     val answer: String,
@@ -177,6 +181,116 @@ class AriaApi {
             permissionLevel = permission?.optString("level", "safe") ?: "safe",
             requiresApproval = permission?.optBoolean("requires_approval", false) ?: false
         )
+    }
+
+
+    // اتصال مستقیم و بدون حساب به OVHcloud AI Endpoints؛ مناسب آزمایش سبک.
+    // محدودیت رسمی ناشناس: ۲ درخواست در دقیقه به‌ازای IP و مدل.
+    fun freeProviderStatus(): JSONObject {
+        return request(
+            method = "GET",
+            baseUrl = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+            path = "/models"
+        )
+    }
+
+    fun freeChat(
+        prompt: String,
+        history: List<Pair<String, String>> = emptyList()
+    ): AriaResponse {
+        val messages = JSONArray()
+        messages.put(
+            JSONObject()
+                .put("role", "system")
+                .put("content", "تو ARIA هستی، دستیار هوشمند فارسی. پاسخ‌ها را دقیق، کاربردی و به زبان کاربر بده. اگر کاربر فارسی نوشت، فارسی روان پاسخ بده.")
+        )
+        history.takeLast(12).forEach { (role, content) ->
+            if ((role == "user" || role == "assistant") && content.isNotBlank()) {
+                messages.put(
+                    JSONObject().put("role", role).put("content", content.take(8000))
+                )
+            }
+        }
+        messages.put(JSONObject().put("role", "user").put("content", prompt.take(12000)))
+        val result = request(
+            method = "POST",
+            baseUrl = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+            path = "/chat/completions",
+            body = JSONObject()
+                .put("model", "gpt-oss-20b")
+                .put("messages", messages)
+                .put("stream", false)
+        )
+        val choices = result.optJSONArray("choices")
+        val answer = choices?.optJSONObject(0)?.optJSONObject("message")
+            ?.optString("content").orEmpty().trim()
+        if (answer.isBlank()) throw AriaException("empty_ai_response", "مدل هوش مصنوعی پاسخ خالی برگرداند.")
+        return AriaResponse(answer, "safe", false)
+    }
+
+    private fun pollinationsBytes(url: String, apiKey: String): ByteArray {
+        if (apiKey.isBlank()) {
+            throw AriaException(
+                "pollinations_key_required",
+                "برای ساخت عکس یا کلیپ، ابتدا کلید Pollinations را در تنظیمات وارد کن. دریافت کلید: enter.pollinations.ai"
+            )
+        }
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 15000
+        connection.readTimeout = 300000
+        connection.setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
+        connection.setRequestProperty("Accept", "image/*, video/mp4, application/json")
+        val code = connection.responseCode
+        if (code !in 200..299) {
+            val raw = (connection.errorStream ?: connection.inputStream).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            connection.disconnect()
+            val message = when (code) {
+                401, 403 -> "کلید Pollinations معتبر نیست یا اجازهٔ این مدل را ندارد."
+                402 -> "اعتبار Pollinations تمام شده است؛ هزینه و موجودی حساب را بررسی کن."
+                429 -> "سهمیهٔ Pollinations موقتاً تمام شده؛ کمی بعد دوباره امتحان کن."
+                else -> "سرویس رسانه پاسخ خطا داد (HTTP $code): ${raw.take(180)}"
+            }
+            throw AriaException("pollinations_http_$code", message)
+        }
+        val type = connection.contentType.orEmpty()
+        if (type.contains("application/json", ignoreCase = true)) {
+            val raw = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            connection.disconnect()
+            throw AriaException("unexpected_media_response", "سرویس به‌جای فایل رسانه‌ای پاسخ JSON برگرداند: ${raw.take(180)}")
+        }
+        val bytes = connection.inputStream.use { it.readBytes() }
+        connection.disconnect()
+        if (bytes.isEmpty()) throw AriaException("empty_media_response", "فایل رسانه‌ای خالی بود.")
+        return bytes
+    }
+
+    fun generatePollinationsImage(prompt: String, apiKey: String): String {
+        val encodedPrompt = URLEncoder.encode(prompt, "UTF-8").replace("+", "%20")
+        val bytes = pollinationsBytes(
+            "https://gen.pollinations.ai/image/$encodedPrompt?model=flux",
+            apiKey
+        )
+        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }
+
+    fun generatePollinationsVideo(prompt: String, apiKey: String, context: Context): String {
+        val encodedPrompt = URLEncoder.encode(prompt, "UTF-8").replace("+", "%20")
+        val bytes = pollinationsBytes(
+            "https://gen.pollinations.ai/video/$encodedPrompt?duration=5&aspectRatio=16%3A9",
+            apiKey
+        )
+        val directory = File(context.cacheDir, "aria_media")
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw AriaException("media_storage_failed", "فضای موقت ذخیرهٔ کلیپ ساخته نشد.")
+        }
+        val file = File(directory, "aria_video_${System.currentTimeMillis()}.mp4")
+        file.writeBytes(bytes)
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        ).toString()
     }
 
     fun status(baseUrl: String): JSONObject {
