@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: aria-cloud
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./cloud/Dockerfile
+    dockerContext: ./cloud
+    healthCheckPath: /status
+    envVars:
+      - key: ARIA_API_BASE_URL
+        value: https://openrouter.ai/api/v1/chat/completions
+      - key: ARIA_API_KEY
+        sync: false
+      - key: ARIA_MODEL
+        value: openrouter/free
+      - key: ARIA_MEDIA_ENABLED
+        value: "false"
+      - key: ARIA_DB
+        value: /tmp/aria_cloud.db
+      - key: ARIA_OWNER_NAME
+        value: Milad
