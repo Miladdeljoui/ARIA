@@ -672,7 +672,7 @@ private fun AriaApp(
                     modifier = Modifier.size(48.dp),
                     shape = CircleShape,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    enabled = message.isNotBlank() && onlineMode != "STANDBY",
+                    enabled = message.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC87956), contentColor = Color.White)
                 ) { Text("➤") }
             }
