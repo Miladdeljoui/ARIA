@@ -32,7 +32,12 @@ OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().
 TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
 MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
 GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.com/repos/Miladdeljoui/ARIA/releases/latest")
-DEFAULT_REMOTE_MODEL = "gemini-3.5-flash-lite" if ARIA_PROVIDER == "doona" else "openrouter/free"
+DEFAULT_REMOTE_MODEL = {
+    "doona": "gemini-3.5-flash-lite",
+    "avalai": "gpt-5.4-nano",
+    "1xai": "deepseek-chat",
+    "heroai": "deepseek/deepseek-chat",
+}.get(ARIA_PROVIDER, "openrouter/free")
 MODEL = os.getenv("ARIA_MODEL", "").strip() or (DEFAULT_REMOTE_MODEL if ARIA_API_KEY else "qwen3:1.7b")
 if ARIA_API_KEY and MODEL == "qwen3:1.7b":
     MODEL = DEFAULT_REMOTE_MODEL
