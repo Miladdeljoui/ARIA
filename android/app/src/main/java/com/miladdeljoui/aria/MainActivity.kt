@@ -694,6 +694,22 @@ private fun AriaApp(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("چت مستقیم و رایگان", color = AriaCyan, fontWeight = FontWeight.SemiBold)
+                    Text("آزمایشگاه GPU در Molab", color = AriaCyan, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "این محیط برای آزمایش شخصی مدل‌ها در Notebook است؛ GPU آن به چت یا ساخت رسانهٔ ARIA وصل نمی‌شود و نباید به API عمومی یا پراکسی تبدیل شود.",
+                        color = AriaMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://molab.marimo.io/")))
+                            }.onFailure {
+                                status = "بازکردن Molab ناموفق بود."
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("بازکردن آزمایشگاه Molab") }
                     Text("چت از موتور رایگان مستقل از سرور ARIA استفاده می‌کند. کد شش‌رقمی جفت‌سازی لازم نیست.", color = AriaMuted)
                     OutlinedTextField(
                         value = cloudUrl,
