@@ -22,8 +22,8 @@ def _(mo, torch):
         gpu_name = torch.cuda.get_device_name(0)
         vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
         hardware_text = (
-            f"**GPU:** {gpu_name}  \\n"
-            f"**VRAM:** {vram_gb:.1f} GiB  \\n"
+            f"**GPU:** {gpu_name}  \n"
+            f"**VRAM:** {vram_gb:.1f} GiB  \n"
             f"**CUDA:** {torch.version.cuda or 'available'}"
         )
     else:
@@ -32,9 +32,9 @@ def _(mo, torch):
             "گزینهٔ GPU را فعال کن و Notebook را دوباره راه‌اندازی کن."
         )
     mo.md(
-        "# ARIA · آزمایشگاه شخصی مدل‌های هوش مصنوعی\\n\\n"
+        "# ARIA · آزمایشگاه شخصی مدل‌های هوش مصنوعی\n\n"
         "این Notebook برای آزمایش تعاملی مدل‌های متن‌باز است. "
-        "به‌صورت پیش‌فرض هیچ API، پراکسی یا سرور عمومی ایجاد نمی‌کند.\\n\\n"
+        "به‌صورت پیش‌فرض هیچ API، پراکسی یا سرور عمومی ایجاد نمی‌کند.\n\n"
         + hardware_text
     )
     return
@@ -138,7 +138,7 @@ def _(
                 ).strip()
             except Exception as exc:
                 answer_text = f"تولید پاسخ ناموفق بود: {type(exc).__name__}: {exc}"
-    mo.md("## پاسخ مدل\\n\\n" + answer_text)
+    mo.md("## پاسخ مدل\n\n" + answer_text)
     return
 
 
