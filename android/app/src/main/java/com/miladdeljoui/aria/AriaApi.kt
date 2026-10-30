@@ -8,7 +8,6 @@ import java.util.UUID
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.io.File
 
 data class AriaResponse(
@@ -34,7 +33,7 @@ class AriaApi {
 
         connection.requestMethod = method
         connection.connectTimeout = 45000
-        connection.readTimeout = 240000
+        connection.readTimeout = 360000
         connection.setRequestProperty(
             "Content-Type",
             "application/json; charset=utf-8"
@@ -86,6 +85,12 @@ class AriaApi {
                         "مدل هوش مصنوعی روی سرور هنوز تنظیم نشده است."
                     "media_generation_disabled_by_server" ->
                         "ساخت تصویر و کلیپ هنوز از طرف سرور فعال نشده است."
+                    "image_provider_not_configured" ->
+                        "کلید سرویس ساخت تصویر هنوز در سرور تنظیم نشده است."
+                    "video_provider_not_configured" ->
+                        "کلید سرویس ساخت کلیپ هنوز در سرور تنظیم نشده است."
+                    "video_file_too_large" ->
+                        "حجم کلیپ بیشتر از سقف ۲۰ مگابایت است."
                     "image_provider_unavailable_check_model_and_credits" ->
                         "ساخت تصویر ناموفق بود؛ مدل یا اعتبار سرویس را بررسی کن."
                     "video_provider_unavailable_check_model_and_credits" ->
@@ -229,69 +234,33 @@ class AriaApi {
         return AriaResponse(answer, "safe", false)
     }
 
-    private fun pollinationsBytes(url: String, apiKey: String): ByteArray {
-        if (apiKey.isBlank()) {
-            throw AriaException(
-                "pollinations_key_required",
-                "برای ساخت عکس یا کلیپ، کلید App Key با پیشوند pk_ را در تنظیمات وارد کن. از کلید محرمانه sk_ داخل اپ استفاده نکن. دریافت کلید: enter.pollinations.ai"
-            )
+    fun saveVideoBase64(context: Context, encoded: String): String {
+        if (encoded.isBlank()) throw AriaException("empty_video_response", "فایل کلیپ خالی است.")
+        val bytes = try {
+            Base64.decode(encoded, Base64.DEFAULT)
+        } catch (error: IllegalArgumentException) {
+            throw AriaException("invalid_video_base64", "فایل کلیپ دریافتی معتبر نیست.")
         }
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.requestMethod = "GET"
-        connection.connectTimeout = 15000
-        connection.readTimeout = 300000
-        connection.setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
-        connection.setRequestProperty("Accept", "image/*, video/mp4, application/json")
-        val code = connection.responseCode
-        if (code !in 200..299) {
-            val raw = (connection.errorStream ?: connection.inputStream).bufferedReader(Charsets.UTF_8).use { it.readText() }
-            connection.disconnect()
-            val message = when (code) {
-                401, 403 -> "کلید Pollinations معتبر نیست یا اجازهٔ این مدل را ندارد."
-                402 -> "اعتبار Pollinations تمام شده است؛ هزینه و موجودی حساب را بررسی کن."
-                429 -> "سهمیهٔ Pollinations موقتاً تمام شده؛ کمی بعد دوباره امتحان کن."
-                else -> "سرویس رسانه پاسخ خطا داد (HTTP $code): ${raw.take(180)}"
-            }
-            throw AriaException("pollinations_http_$code", message)
+        if (bytes.isEmpty()) throw AriaException("empty_video_response", "فایل کلیپ خالی است.")
+        if (bytes.size > 20 * 1024 * 1024) {
+            throw AriaException("video_file_too_large", "حجم کلیپ بیش از سقف ۲۰ مگابایت است.")
         }
-        val type = connection.contentType.orEmpty()
-        if (type.contains("application/json", ignoreCase = true)) {
-            val raw = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            connection.disconnect()
-            throw AriaException("unexpected_media_response", "سرویس به‌جای فایل رسانه‌ای پاسخ JSON برگرداند: ${raw.take(180)}")
-        }
-        val bytes = connection.inputStream.use { it.readBytes() }
-        connection.disconnect()
-        if (bytes.isEmpty()) throw AriaException("empty_media_response", "فایل رسانه‌ای خالی بود.")
-        return bytes
-    }
-
-    fun generatePollinationsImage(prompt: String, apiKey: String): String {
-        val encodedPrompt = URLEncoder.encode(prompt, "UTF-8").replace("+", "%20")
-        val bytes = pollinationsBytes(
-            "https://gen.pollinations.ai/image/$encodedPrompt?model=flux",
-            apiKey
-        )
-        return Base64.encodeToString(bytes, Base64.NO_WRAP)
-    }
-
-    fun generatePollinationsVideo(prompt: String, apiKey: String, context: Context): String {
-        val encodedPrompt = URLEncoder.encode(prompt, "UTF-8").replace("+", "%20")
-        val bytes = pollinationsBytes(
-            "https://gen.pollinations.ai/video/$encodedPrompt?duration=5&aspectRatio=16%3A9",
-            apiKey
-        )
         val directory = File(context.cacheDir, "aria_media")
         if (!directory.exists() && !directory.mkdirs()) {
             throw AriaException("media_storage_failed", "فضای موقت ذخیرهٔ کلیپ ساخته نشد.")
         }
         val file = File(directory, "aria_video_${System.currentTimeMillis()}.mp4")
-        file.writeBytes(bytes)
-        return FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        ).toString()
+        try {
+            file.writeBytes(bytes)
+            return FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            ).toString()
+        } catch (error: Exception) {
+            file.delete()
+            throw AriaException("media_storage_failed", "ذخیرهٔ کلیپ روی گوشی ناموفق بود.")
+        }
     }
 
     fun status(baseUrl: String): JSONObject {
