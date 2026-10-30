@@ -12,8 +12,8 @@ android {
         applicationId = "com.miladdeljoui.aria"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6.0-beta1"
+        versionCode = 7
+        versionName = "0.7.0-beta1"
     }
 
     buildFeatures { compose = true }
