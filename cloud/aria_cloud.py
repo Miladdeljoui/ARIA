@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import os
 import sqlite3
@@ -5,6 +6,7 @@ import time
 import secrets
 from contextlib import closing
 from pathlib import Path
+from urllib.parse import quote
 
 import requests
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -17,6 +19,15 @@ OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 # Example endpoint: https://openrouter.ai/api/v1/chat/completions
 ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", "https://openrouter.ai/api/v1/chat/completions").strip()
 ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEY", "").strip()
+ARIA_PROVIDER = os.getenv("ARIA_PROVIDER", "openrouter").strip().lower()
+ARIA_IMAGE_API_URL = os.getenv(
+    "ARIA_IMAGE_API_URL",
+    "https://platform.doona.ai/v1/images/generations"
+    if ARIA_PROVIDER == "doona"
+    else "https://openrouter.ai/api/v1/images",
+).strip()
+ARIA_IMAGE_API_KEY = os.getenv("ARIA_IMAGE_API_KEY", "").strip() or ARIA_API_KEY
+POLLINATIONS_API_KEY = os.getenv("POLLINATIONS_API_KEY", "").strip()
 OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().lower()
 TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
 MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
@@ -25,8 +36,11 @@ MODEL = os.getenv("ARIA_MODEL", "").strip() or ("openrouter/free" if ARIA_API_KE
 if ARIA_API_KEY and MODEL == "qwen3:1.7b":
     MODEL = "openrouter/free"
 ARIA_MEDIA_ENABLED = os.getenv("ARIA_MEDIA_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
-ARIA_IMAGE_MODEL = os.getenv("ARIA_IMAGE_MODEL", "bytedance-seed/seedream-4.5").strip()
-ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "bytedance/seedance-2.0").strip()
+ARIA_IMAGE_MODEL = os.getenv(
+    "ARIA_IMAGE_MODEL",
+    "gpt-image-2" if ARIA_PROVIDER == "doona" else "bytedance-seed/seedream-4.5",
+).strip()
+ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "bytedance/seedance-2.0-mini").strip()
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
 
@@ -237,7 +251,9 @@ def home():
         "chat": "/chat",
         "cloud_ai_configured": hosted_ai_configured(),
         "anonymous_guest_access": True,
-        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_API_KEY),
+        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or POLLINATIONS_API_KEY),
+        "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY),
+        "video_enabled": ARIA_MEDIA_ENABLED and bool(POLLINATIONS_API_KEY),
     }
 
 
@@ -261,8 +277,10 @@ def status():
         "ollama": ollama_ok,
         "cloud_ai_configured": hosted_ai_configured(),
         "anonymous_guest_access": True,
-        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_API_KEY),
-        "ai_provider": "openrouter" if hosted_ai_configured() else "ollama",
+        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or POLLINATIONS_API_KEY),
+        "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY),
+        "video_enabled": ARIA_MEDIA_ENABLED and bool(POLLINATIONS_API_KEY),
+        "ai_provider": ARIA_PROVIDER if hosted_ai_configured() else "ollama",
         "server_time": int(time.time()),
     }
 
@@ -486,8 +504,9 @@ def chat(
 def require_media_access(token: str, kind: str) -> int:
     if not ARIA_MEDIA_ENABLED:
         raise HTTPException(status_code=503, detail="media_generation_disabled_by_server")
-    if not ARIA_API_KEY:
-        raise HTTPException(status_code=503, detail="hosted_ai_not_configured")
+    provider_key = ARIA_IMAGE_API_KEY if kind == "image" else POLLINATIONS_API_KEY
+    if not provider_key:
+        raise HTTPException(status_code=503, detail=f"{kind}_provider_not_configured")
     device_id = device_id_from_token(token)
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
@@ -524,23 +543,40 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
     device_id = require_media_access(x_aria_token, "image")
     try:
         response = requests.post(
-            "https://openrouter.ai/api/v1/images",
+            ARIA_IMAGE_API_URL,
             headers={
-                "Authorization": f"Bearer {ARIA_API_KEY}",
+                "Authorization": f"Bearer {ARIA_IMAGE_API_KEY}",
                 "Content-Type": "application/json",
             },
-            json={"model": ARIA_IMAGE_MODEL, "prompt": payload.prompt.strip()},
+            json={
+                "model": ARIA_IMAGE_MODEL,
+                "prompt": payload.prompt.strip(),
+                "size": "1024x1024",
+                "quality": "medium",
+                "n": 1,
+                "response_format": "b64_json",
+            },
             timeout=180,
         )
         response.raise_for_status()
         data = response.json().get("data") or []
-        if not data or not data[0].get("b64_json"):
+        if not data:
             raise ValueError("empty_image_response")
+        item = data[0]
+        image_data = item.get("b64_json")
+        mime_type = item.get("mime_type", "image/png")
+        if not image_data and item.get("url"):
+            image_response = requests.get(item["url"], timeout=90)
+            image_response.raise_for_status()
+            image_data = base64.b64encode(image_response.content).decode("ascii")
+            mime_type = image_response.headers.get("Content-Type", mime_type)
+        if not image_data:
+            raise ValueError("image_response_missing_data")
         record_media_use(device_id, "image")
         return {
             "model": ARIA_IMAGE_MODEL,
-            "mime_type": data[0].get("mime_type", "image/png"),
-            "image_base64": data[0]["b64_json"],
+            "mime_type": mime_type,
+            "image_base64": image_data,
             "note": "image_generation_may_use_paid_provider_credits",
         }
     except requests.RequestException as exc:
@@ -549,40 +585,37 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
             status_code=429 if status_code == 429 else 503,
             detail="image_provider_unavailable_check_model_and_credits",
         ) from exc
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, IndexError) as exc:
         raise HTTPException(status_code=503, detail="invalid_image_response") from exc
 
 
 @app.post("/media/video")
 def generate_video(payload: VideoRequest, x_aria_token: str = Header(default="")):
     device_id = require_media_access(x_aria_token, "video")
+    url = f"https://gen.pollinations.ai/video/{quote(payload.prompt.strip(), safe='')}"
     try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/videos",
+        response = requests.get(
+            url,
+            params={"model": ARIA_VIDEO_MODEL, "duration": payload.duration},
             headers={
-                "Authorization": f"Bearer {ARIA_API_KEY}",
-                "Content-Type": "application/json",
+                "Authorization": f"Bearer {POLLINATIONS_API_KEY}",
+                "Accept": "video/mp4",
             },
-            json={
-                "model": ARIA_VIDEO_MODEL,
-                "prompt": payload.prompt.strip(),
-                "duration": payload.duration,
-                "aspect_ratio": payload.aspect_ratio,
-                "generate_audio": False,
-            },
-            timeout=60,
+            timeout=300,
         )
         response.raise_for_status()
-        job = response.json()
-        job_id = job.get("id") or job.get("generation_id")
-        if not job_id:
-            raise ValueError("missing_video_job_id")
+        content_type = response.headers.get("Content-Type", "video/mp4")
+        if "json" in content_type.lower():
+            raise ValueError("video_provider_returned_json")
+        if not response.content:
+            raise ValueError("empty_video_response")
+        if len(response.content) > 20 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="video_file_too_large")
         record_media_use(device_id, "video")
         return {
-            "id": job_id,
-            "status": job.get("status", "pending"),
-            "polling_url": f"/media/video/{job_id}",
             "model": ARIA_VIDEO_MODEL,
+            "mime_type": content_type,
+            "video_base64": base64.b64encode(response.content).decode("ascii"),
             "note": "video_generation_may_use_paid_provider_credits",
         }
     except requests.RequestException as exc:
@@ -593,37 +626,6 @@ def generate_video(payload: VideoRequest, x_aria_token: str = Header(default="")
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=503, detail="invalid_video_response") from exc
-
-
-@app.get("/media/video/{job_id}")
-def video_status(job_id: str, x_aria_token: str = Header(default="")):
-    if not ARIA_MEDIA_ENABLED or not ARIA_API_KEY:
-        raise HTTPException(status_code=503, detail="media_generation_disabled_by_server")
-    if device_id_from_token(x_aria_token) is None:
-        raise HTTPException(status_code=401, detail="unauthorized")
-    if not job_id or len(job_id) > 200 or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_." for c in job_id):
-        raise HTTPException(status_code=400, detail="invalid_video_job_id")
-    try:
-        response = requests.get(
-            f"https://openrouter.ai/api/v1/videos/{job_id}",
-            headers={"Authorization": f"Bearer {ARIA_API_KEY}"},
-            timeout=45,
-        )
-        response.raise_for_status()
-        job = response.json()
-        return {
-            "id": job.get("id", job_id),
-            "status": job.get("status", "unknown"),
-            "error": job.get("error"),
-            "video_urls": job.get("unsigned_urls") or [],
-            "usage": job.get("usage"),
-        }
-    except requests.RequestException as exc:
-        status_code = getattr(getattr(exc, "response", None), "status_code", 503)
-        raise HTTPException(
-            status_code=429 if status_code == 429 else 503,
-            detail="video_status_unavailable",
-        ) from exc
 
 
 if __name__ == "__main__":
