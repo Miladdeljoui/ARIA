@@ -262,9 +262,6 @@ private fun AriaApp(
     var cloudToken by remember {
         mutableStateOf(prefs.getString("cloud_token", "") ?: "")
     }
-    var pollinationsKey by remember {
-        mutableStateOf(prefs.getString("pollinations_key", "") ?: "")
-    }
     var localToken by remember {
         mutableStateOf(prefs.getString("local_token", "") ?: "")
     }
@@ -298,27 +295,25 @@ private fun AriaApp(
         )
     }
 
-    LaunchedEffect(Unit) {
-        status = "در حال بررسی موتور رایگان گفت‌وگو…"
+    LaunchedEffect(cloudUrl) {
+        status = "در حال بررسی اتصال ARIA…"
         executor.execute {
             try {
-                val catalog = api.freeProviderStatus()
-                val models = catalog.optJSONArray("data")
-                val hasModel = models != null && (0 until models.length()).any {
-                    models.optJSONObject(it)?.optString("id") == "gpt-oss-20b"
-                }
+                val server = api.status(cloudUrl.trimEnd('/'))
+                val configured = server.optBoolean("cloud_ai_configured", false)
+                val provider = server.optString("ai_provider", "cloud").uppercase(Locale.ROOT)
                 updateUi {
-                    onlineMode = if (hasModel) "AI FREE" else "AI"
-                    status = if (hasModel) {
-                        "موتور گفت‌وگوی مستقیم آماده است. محدودیت ناشناس: حدود ۲ درخواست در دقیقه."
+                    onlineMode = if (configured) provider else "SERVER"
+                    status = if (configured) {
+                        "سرور پاسخ می‌دهد؛ موتور $provider تنظیم شده است."
                     } else {
-                        "سرویس پاسخ داد؛ مدل پیش‌فرض ممکن است در دسترس نباشد."
+                        "سرور در دسترس است، اما کلید موتور هوش مصنوعی هنوز تنظیم نشده؛ مسیر رایگان جایگزین هنگام ارسال امتحان می‌شود."
                     }
                 }
             } catch (error: Exception) {
                 updateUi {
                     onlineMode = "STANDBY"
-                    status = "بررسی سرویس مستقیم ناموفق بود؛ هنگام ارسال پیام دوباره تلاش می‌کنیم."
+                    status = "سرور ARIA پاسخ نداد؛ هنگام ارسال مسیر رایگان جایگزین را هم امتحان می‌کنیم."
                 }
             }
         }
@@ -396,12 +391,15 @@ private fun AriaApp(
         composerMode = "chat"
 
         if (mode == "image") {
-            updateUi { status = "درخواست ساخت تصویر ارسال شد؛ این قابلیت ممکن است اعتبار پولی مصرف کند." }
+            updateUi { status = "در حال ساخت تصویر از طریق سرور امن ARIA؛ ممکن است هزینهٔ سرویس‌دهنده اعمال شود." }
             mediaExecutor.execute {
                 try {
-                    val base64 = api.generatePollinationsImage(prompt, pollinationsKey)
+                    val token = guestToken()
+                    val media = api.generateImage(cloudUrl.trimEnd('/'), token, prompt)
+                    val base64 = media.optString("image_base64")
+                    if (base64.isBlank()) throw IllegalStateException("سرور تصویر خالی برگرداند.")
                     updateUi {
-                        messages.add(ChatItem(false, "تصویر تولیدشده توسط ARIA", imageBase64 = base64))
+                        messages.add(ChatItem(false, "تصویر آماده شد · ${media.optString("model", "ARIA")}", imageBase64 = base64))
                         status = "تصویر آماده شد."
                     }
                 } catch (error: Exception) {
@@ -412,12 +410,16 @@ private fun AriaApp(
         }
 
         if (mode == "video") {
-            updateUi { status = "درخواست کلیپ به Pollinations ارسال شد؛ ممکن است اعتبار مصرف شود." }
+            updateUi { status = "در حال ساخت کلیپ از طریق سرور؛ ممکن است چند دقیقه و اعتبار سرویس لازم باشد." }
             mediaExecutor.execute {
                 try {
-                    val videoUri = api.generatePollinationsVideo(prompt, pollinationsKey, context)
+                    val token = guestToken()
+                    val media = api.generateVideo(cloudUrl.trimEnd('/'), token, prompt, duration = 5)
+                    val base64 = media.optString("video_base64")
+                    if (base64.isBlank()) throw IllegalStateException("سرور کلیپ آماده برنگرداند.")
+                    val videoUri = api.saveVideoBase64(context, base64)
                     updateUi {
-                        messages.add(ChatItem(false, "کلیپ آماده شد. برای پخش روی دکمه بزن.", videoUrl = videoUri))
+                        messages.add(ChatItem(false, "کلیپ آماده شد · ${media.optString("model", "ARIA")}", videoUrl = videoUri))
                         status = "کلیپ آماده شد."
                     }
                 } catch (error: Exception) {
@@ -431,33 +433,36 @@ private fun AriaApp(
             try {
                 var response: AriaResponse? = null
                 var source = ""
-                var directError: Exception? = null
+                var serverError: Exception? = null
+
                 try {
-                    response = api.freeChat(prompt, history)
-                    source = "OVH رایگان"
-                } catch (error: Exception) {
-                    directError = error
-                }
-                if (response == null && cloudUrl.isNotBlank()) {
+                    var token = guestToken()
                     try {
-                        var token = guestToken()
-                        try {
+                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
+                    } catch (firstError: Exception) {
+                        if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
+                            token = guestToken(forceRegister = true)
                             response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
-                        } catch (firstError: Exception) {
-                            if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
-                                token = guestToken(forceRegister = true)
-                                response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
-                            } else {
-                                throw firstError
-                            }
+                        } else {
+                            throw firstError
                         }
-                        source = "سرور پشتیبان"
-                    } catch (fallbackError: Exception) {
-                        val first = directError?.message?.takeIf { it.isNotBlank() } ?: "سرویس رایگان پاسخ نداد."
-                        throw IllegalStateException("$first\nسرور پشتیبان هم در دسترس نیست: ${fallbackError.message ?: "خطای ارتباط"}")
+                    }
+                    source = "سرور ARIA"
+                } catch (error: Exception) {
+                    serverError = error
+                }
+
+                if (response == null) {
+                    try {
+                        response = api.freeChat(prompt, history)
+                        source = "OVH جایگزین"
+                    } catch (directError: Exception) {
+                        val serverMessage = serverError?.message?.takeIf { it.isNotBlank() }
+                            ?: "سرور ARIA در دسترس نیست."
+                        throw IllegalStateException("$serverMessage\nمسیر جایگزین هم پاسخ نداد: ${directError.message ?: "خطای ارتباط"}")
                     }
                 }
-                if (response == null) throw (directError ?: IllegalStateException("مدل هوش مصنوعی پاسخ نداد."))
+                if (response == null) throw IllegalStateException("مدل هوش مصنوعی پاسخ نداد.")
                 val result = response!!
                 val approval = if (result.requiresApproval) "\n\nنیازمند تأیید مالک · ${result.permissionLevel}" else ""
                 updateUi {
@@ -704,27 +709,16 @@ private fun AriaApp(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("اتصال مجدد به سرور") }
-                    OutlinedTextField(
-                        value = pollinationsKey,
-                        onValueChange = {
-                            pollinationsKey = it.trim()
-                            prefs.edit().putString("pollinations_key", pollinationsKey).apply()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("کلید Pollinations برای تصویر و کلیپ") },
-                        placeholder = { Text("App Key") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true
+                    Text(
+                        "چت، ساخت تصویر و ساخت کلیپ از سرور ARIA انجام می‌شود. کلیدهای محرمانه فقط در تنظیمات خصوصی سرور نگهداری می‌شوند و داخل اپ قرار نمی‌گیرند.",
+                        color = AriaMuted,
+                        style = MaterialTheme.typography.bodySmall
                     )
-                    OutlinedButton(
-                        onClick = {
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://enter.pollinations.ai")))
-                            }.onFailure { status = "بازکردن صفحهٔ دریافت کلید ناموفق بود." }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("دریافت کلید تصویر و کلیپ") }
-                    Text("ساخت تصویر و کلیپ رایگانِ نامحدود نیست. برای استفادهٔ شخصی فقط App Key مجاز را وارد کن؛ Secret Key محرمانه را در اپ یا APK عمومی قرار نده.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "ساخت تصویر و کلیپ هزینه یا سهمیهٔ جداگانه دارد و فقط بعد از فعال‌سازی مدیر سرور در دسترس است.",
+                        color = AriaMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     OutlinedButton(onClick = requestMicPermission, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن میکروفون") }
                     OutlinedButton(
                         onClick = { showSettings = false; showFeedback = true },
@@ -788,7 +782,7 @@ private fun AriaApp(
                         tokenToUse.isBlank() -> status = "ابتدا اتصال خودکار به سرور را از تنظیمات امتحان کن."
                         else -> executor.execute {
                             try {
-                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.5.1-beta1")
+                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.7.0-beta1")
                                 updateUi {
                                     status = "نظر تو ثبت شد؛ ممنون از همراهی‌ات!"
                                     feedbackText = ""
