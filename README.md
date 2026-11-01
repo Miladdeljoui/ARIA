@@ -88,6 +88,10 @@ ARIA is designed to assist its owner, not to bypass operating-system security or
 
 See docs/android-setup.md for the Android + laptop setup and docs/protection.md for the threat-awareness architecture.
 
+## Iranian websites MCP integrations
+
+See [docs/iranian-mcp-integration.md](docs/iranian-mcp-integration.md) for the selected Iranian website MCP catalog, backend architecture, security rules and rollout plan. MCP tools are backend integrations, not LLM inference or image/video generation providers.
+
 ## Molab GPU lab
 
 A personal, interactive GPU notebook for testing Qwen3 models is available at [notebooks/aria_molab_gpu_lab.py](notebooks/aria_molab_gpu_lab.py). Read [docs/molab-gpu-lab.md](docs/molab-gpu-lab.md) before use. Molab is not an ARIA backend or public inference API; its acceptable use rules prohibit exposing its compute to external traffic.
