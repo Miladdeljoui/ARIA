@@ -15,38 +15,46 @@ from pydantic import BaseModel, Field
 APP_HOST = os.getenv("ARIA_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("ARIA_PORT", "8000"))
 OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
-# Configure an OpenAI-compatible hosted inference endpoint to run ARIA without a laptop.
-# Example endpoint: https://openrouter.ai/api/v1/chat/completions
-ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", "https://openrouter.ai/api/v1/chat/completions").strip()
+# Default to AvalAI: a local-currency, Iran-oriented OpenAI-compatible gateway.
+# Provider credentials stay on the server and are never returned to Android.
+ARIA_PROVIDER = os.getenv("ARIA_PROVIDER", "avalai").strip().lower()
+DEFAULT_CHAT_URLS = {
+    "avalai": "https://api.avalai.ir/v1/chat/completions",
+    "doona": "https://platform.doona.ai/v1/chat/completions",
+    "1xai": "https://1xai.ir/v1/chat/completions",
+    "heroai": "https://iranapi.heroai.ir/ai/chat/completions",
+    "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+}
+ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", DEFAULT_CHAT_URLS.get(ARIA_PROVIDER, "")).strip()
 ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEY", "").strip()
-ARIA_PROVIDER = os.getenv("ARIA_PROVIDER", "openrouter").strip().lower()
-ARIA_IMAGE_API_URL = os.getenv(
-    "ARIA_IMAGE_API_URL",
-    "https://platform.doona.ai/v1/images/generations"
-    if ARIA_PROVIDER == "doona"
-    else "https://openrouter.ai/api/v1/images",
-).strip()
+DEFAULT_IMAGE_URLS = {
+    "avalai": "https://api.avalai.ir/v1/images/generations",
+    "doona": "https://platform.doona.ai/v1/images/generations",
+}
+ARIA_IMAGE_API_URL = os.getenv("ARIA_IMAGE_API_URL", DEFAULT_IMAGE_URLS.get(ARIA_PROVIDER, "")).strip()
 ARIA_IMAGE_API_KEY = os.getenv("ARIA_IMAGE_API_KEY", "").strip() or ARIA_API_KEY
-POLLINATIONS_API_KEY = os.getenv("POLLINATIONS_API_KEY", "").strip()
+ARIA_VIDEO_API_URL = os.getenv("ARIA_VIDEO_API_URL", "https://api.avalai.ir/v1/videos").strip()
+ARIA_VIDEO_API_KEY = os.getenv("ARIA_VIDEO_API_KEY", "").strip() or ARIA_API_KEY
+VIDEO_TIMEOUT_SECONDS = max(60, min(330, int(os.getenv("ARIA_VIDEO_TIMEOUT_SECONDS", "300"))))
+VIDEO_POLL_SECONDS = max(3, min(15, int(os.getenv("ARIA_VIDEO_POLL_SECONDS", "5"))))
 OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().lower()
 TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
 MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
 GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.com/repos/Miladdeljoui/ARIA/releases/latest")
 DEFAULT_REMOTE_MODEL = {
-    "doona": "gemini-3.5-flash-lite",
     "avalai": "gpt-5.4-nano",
+    "doona": "gemini-3.5-flash-lite",
     "1xai": "deepseek-chat",
     "heroai": "deepseek/deepseek-chat",
-}.get(ARIA_PROVIDER, "openrouter/free")
+    "openrouter": "openrouter/free",
+}.get(ARIA_PROVIDER, "qwen3:1.7b")
 MODEL = os.getenv("ARIA_MODEL", "").strip() or (DEFAULT_REMOTE_MODEL if ARIA_API_KEY else "qwen3:1.7b")
-if ARIA_API_KEY and MODEL == "qwen3:1.7b":
-    MODEL = DEFAULT_REMOTE_MODEL
 ARIA_MEDIA_ENABLED = os.getenv("ARIA_MEDIA_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 ARIA_IMAGE_MODEL = os.getenv(
     "ARIA_IMAGE_MODEL",
-    "gpt-image-2" if ARIA_PROVIDER == "doona" else "bytedance-seed/seedream-4.5",
+    "muse-image-1.0" if ARIA_PROVIDER == "avalai" else ("gpt-image-2" if ARIA_PROVIDER == "doona" else ""),
 ).strip()
-ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "bytedance/seedance-2.0-mini").strip()
+ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "sora-2").strip()
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
 
@@ -257,9 +265,9 @@ def home():
         "chat": "/chat",
         "cloud_ai_configured": hosted_ai_configured(),
         "anonymous_guest_access": True,
-        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or POLLINATIONS_API_KEY),
-        "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY),
-        "video_enabled": ARIA_MEDIA_ENABLED and bool(POLLINATIONS_API_KEY),
+        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or ARIA_VIDEO_API_KEY),
+        "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY and ARIA_IMAGE_API_URL and ARIA_IMAGE_MODEL),
+        "video_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_VIDEO_API_KEY and ARIA_VIDEO_API_URL and ARIA_VIDEO_MODEL),
     }
 
 
@@ -283,10 +291,13 @@ def status():
         "ollama": ollama_ok,
         "cloud_ai_configured": hosted_ai_configured(),
         "anonymous_guest_access": True,
-        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or POLLINATIONS_API_KEY),
-        "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY),
-        "video_enabled": ARIA_MEDIA_ENABLED and bool(POLLINATIONS_API_KEY),
-        "ai_provider": ARIA_PROVIDER if hosted_ai_configured() else "ollama",
+        "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or ARIA_VIDEO_API_KEY),
+        "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY and ARIA_IMAGE_API_URL and ARIA_IMAGE_MODEL),
+        "video_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_VIDEO_API_KEY and ARIA_VIDEO_API_URL and ARIA_VIDEO_MODEL),
+        "ai_provider": ARIA_PROVIDER if hosted_ai_configured() else ("ollama" if ollama_ok else "not_configured"),
+        "chat_ready": hosted_ai_configured() or ollama_ok,
+        "image_model": ARIA_IMAGE_MODEL,
+        "video_model": ARIA_VIDEO_MODEL,
         "server_time": int(time.time()),
     }
 
@@ -476,6 +487,14 @@ def chat(
         if hosted_ai_configured():
             answer = ask_hosted_api(messages)
         else:
+            try:
+                health = requests.get(OLLAMA_URL.replace("/api/chat", "/api/tags"), timeout=3)
+                health.raise_for_status()
+            except requests.RequestException as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"cloud_ai_not_configured: set ARIA_API_KEY for provider {ARIA_PROVIDER}",
+                ) from exc
             answer = ask_ollama(messages)
     except RuntimeError as exc:
         raise HTTPException(
@@ -510,7 +529,7 @@ def chat(
 def require_media_access(token: str, kind: str) -> int:
     if not ARIA_MEDIA_ENABLED:
         raise HTTPException(status_code=503, detail="media_generation_disabled_by_server")
-    provider_key = ARIA_IMAGE_API_KEY if kind == "image" else POLLINATIONS_API_KEY
+    provider_key = ARIA_IMAGE_API_KEY if kind == "image" else ARIA_VIDEO_API_KEY
     if not provider_key:
         raise HTTPException(status_code=503, detail=f"{kind}_provider_not_configured")
     device_id = device_id_from_token(token)
@@ -557,10 +576,7 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
             json={
                 "model": ARIA_IMAGE_MODEL,
                 "prompt": payload.prompt.strip(),
-                "size": "1024x1024",
-                "quality": "medium",
                 "n": 1,
-                "response_format": "b64_json",
             },
             timeout=180,
         )
@@ -597,40 +613,88 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
 
 @app.post("/media/video")
 def generate_video(payload: VideoRequest, x_aria_token: str = Header(default="")):
+    """Generate a short clip through AvalAI's asynchronous Videos API."""
     device_id = require_media_access(x_aria_token, "video")
-    url = f"https://gen.pollinations.ai/video/{quote(payload.prompt.strip(), safe='')}"
+    if payload.duration not in (4, 8):
+        raise HTTPException(status_code=422, detail="video_duration_must_be_4_or_8_seconds")
+
+    headers = {
+        "Authorization": f"Bearer {ARIA_VIDEO_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    size = {
+        "16:9": "1280x720",
+        "9:16": "720x1280",
+        "1:1": "1024x1024",
+    }[payload.aspect_ratio]
+
     try:
-        response = requests.get(
-            url,
-            params={"model": ARIA_VIDEO_MODEL, "duration": payload.duration},
-            headers={
-                "Authorization": f"Bearer {POLLINATIONS_API_KEY}",
-                "Accept": "video/mp4",
+        create_response = requests.post(
+            ARIA_VIDEO_API_URL,
+            headers=headers,
+            json={
+                "model": ARIA_VIDEO_MODEL,
+                "prompt": payload.prompt.strip(),
+                "size": size,
+                "seconds": str(payload.duration),
             },
-            timeout=300,
+            timeout=60,
         )
-        response.raise_for_status()
-        content_type = response.headers.get("Content-Type", "video/mp4")
-        if "json" in content_type.lower():
-            raise ValueError("video_provider_returned_json")
-        if not response.content:
-            raise ValueError("empty_video_response")
-        if len(response.content) > 20 * 1024 * 1024:
+        create_response.raise_for_status()
+        job = create_response.json()
+        video_id = str(job.get("id", "")).strip()
+        if not video_id:
+            raise ValueError("video_job_id_missing")
+
+        deadline = time.monotonic() + VIDEO_TIMEOUT_SECONDS
+        state = str(job.get("status", "queued")).lower()
+        while state not in {"completed", "failed"} and time.monotonic() < deadline:
+            time.sleep(VIDEO_POLL_SECONDS)
+            poll_response = requests.get(
+                f"{ARIA_VIDEO_API_URL.rstrip('/')}/{quote(video_id, safe='')}",
+                headers={"Authorization": f"Bearer {ARIA_VIDEO_API_KEY}"},
+                timeout=30,
+            )
+            poll_response.raise_for_status()
+            job = poll_response.json()
+            state = str(job.get("status", "")).lower()
+
+        if state == "failed":
+            raise HTTPException(status_code=502, detail="video_generation_failed_no_retry_until_checked")
+        if state != "completed":
+            # Avoid duplicate paid jobs if the upstream render is still running.
+            raise HTTPException(status_code=504, detail="video_generation_still_processing_check_provider_before_retry")
+
+        content_response = requests.get(
+            f"{ARIA_VIDEO_API_URL.rstrip('/')}/{quote(video_id, safe='')}/content",
+            headers={"Authorization": f"Bearer {ARIA_VIDEO_API_KEY}"},
+            timeout=90,
+        )
+        content_response.raise_for_status()
+        content_type = content_response.headers.get("Content-Type", "video/mp4")
+        if "json" in content_type.lower() or not content_response.content:
+            raise ValueError("empty_or_invalid_video_content")
+        if len(content_response.content) > 20 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="video_file_too_large")
+
         record_media_use(device_id, "video")
         return {
             "model": ARIA_VIDEO_MODEL,
+            "job_id": video_id,
             "mime_type": content_type,
-            "video_base64": base64.b64encode(response.content).decode("ascii"),
-            "note": "video_generation_may_use_paid_provider_credits",
+            "video_base64": base64.b64encode(content_response.content).decode("ascii"),
+            "note": "video_generation_uses_provider_credits",
         }
+    except HTTPException:
+        raise
     except requests.RequestException as exc:
-        status_code = getattr(getattr(exc, "response", None), "status_code", 503)
+        upstream_status = getattr(getattr(exc, "response", None), "status_code", 503)
+        code = 429 if upstream_status == 429 else (402 if upstream_status == 402 else 503)
         raise HTTPException(
-            status_code=429 if status_code == 429 else 503,
+            status_code=code,
             detail="video_provider_unavailable_check_model_and_credits",
         ) from exc
-    except ValueError as exc:
+    except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=503, detail="invalid_video_response") from exc
 
 
