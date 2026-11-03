@@ -9,11 +9,11 @@ services:
     healthCheckPath: /status
     envVars:
       - key: ARIA_API_BASE_URL
-        value: https://openrouter.ai/api/v1/chat/completions
+        value: https://api.avalai.ir/v1/chat/completions
       - key: ARIA_API_KEY
         sync: false
       - key: ARIA_MODEL
-        value: openrouter/free
+        value: gpt-5.4-nano
       - key: ARIA_MEDIA_ENABLED
         value: "false"
       - key: ARIA_DB
