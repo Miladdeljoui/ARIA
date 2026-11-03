@@ -190,50 +190,6 @@ class AriaApi {
     }
 
 
-    // اتصال مستقیم و بدون حساب به OVHcloud AI Endpoints؛ مناسب آزمایش سبک.
-    // محدودیت رسمی ناشناس: ۲ درخواست در دقیقه به‌ازای IP و مدل.
-    fun freeProviderStatus(): JSONObject {
-        return request(
-            method = "GET",
-            baseUrl = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
-            path = "/models"
-        )
-    }
-
-    fun freeChat(
-        prompt: String,
-        history: List<Pair<String, String>> = emptyList()
-    ): AriaResponse {
-        val messages = JSONArray()
-        messages.put(
-            JSONObject()
-                .put("role", "system")
-                .put("content", "تو ARIA هستی، دستیار هوشمند فارسی. پاسخ‌ها را دقیق، کاربردی و به زبان کاربر بده. اگر کاربر فارسی نوشت، فارسی روان پاسخ بده.")
-        )
-        history.takeLast(12).forEach { (role, content) ->
-            if ((role == "user" || role == "assistant") && content.isNotBlank()) {
-                messages.put(
-                    JSONObject().put("role", role).put("content", content.take(8000))
-                )
-            }
-        }
-        messages.put(JSONObject().put("role", "user").put("content", prompt.take(12000)))
-        val result = request(
-            method = "POST",
-            baseUrl = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
-            path = "/chat/completions",
-            body = JSONObject()
-                .put("model", "gpt-oss-20b")
-                .put("messages", messages)
-                .put("stream", false)
-        )
-        val choices = result.optJSONArray("choices")
-        val answer = choices?.optJSONObject(0)?.optJSONObject("message")
-            ?.optString("content").orEmpty().trim()
-        if (answer.isBlank()) throw AriaException("empty_ai_response", "مدل هوش مصنوعی پاسخ خالی برگرداند.")
-        return AriaResponse(answer, "safe", false)
-    }
-
     fun saveVideoBase64(context: Context, encoded: String): String {
         if (encoded.isBlank()) throw AriaException("empty_video_response", "فایل کلیپ خالی است.")
         val bytes = try {
