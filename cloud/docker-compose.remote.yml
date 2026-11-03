@@ -7,7 +7,7 @@ services:
       - .env
     environment:
       ARIA_DB: /data/aria_cloud.db
-      # In this profile, inference runs at OpenRouter. Do not pull a local LLM.
+      # Inference runs at the configured API provider. No local LLM or GPU is required.
       ARIA_OLLAMA_URL: http://127.0.0.1:11434/api/chat
     expose:
       - "8000"
