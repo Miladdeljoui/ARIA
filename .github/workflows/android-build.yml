@@ -16,6 +16,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Check Python cloud service syntax
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Compile Python cloud service
+        run: python -m compileall -q cloud
+
       - name: Setup Java 17
         uses: actions/setup-java@v5
         with:
