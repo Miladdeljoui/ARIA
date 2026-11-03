@@ -79,17 +79,24 @@ Official docs: https://platform.doona.ai/docs
 
 ## Video generation
 
-ARIA's current video adapter uses Pollinations from the **server**, not from Android. It needs a server-side `sk_` generation key:
+ARIA uses AvalAI's asynchronous Videos API. The default model is `veo-3.1-fast-generate-001`, with a 4-second clip requested first. The documented price is **$0.15 per second**, so a 4-second generation is about **$0.60** before any applicable account balance conversion or other charges. Check the current provider price before enabling it.
+
+Server environment:
 
 ```dotenv
-POLLINATIONS_API_KEY=YOUR_POLLINATIONS_SECRET_KEY
-ARIA_VIDEO_MODEL=bytedance/seedance-2.0-mini
-ARIA_MEDIA_ENABLED=true
+ARIA_VIDEO_API_URL=https://api.avalai.ir/v1/videos
+ARIA_VIDEO_API_KEY=
+ARIA_VIDEO_MODEL=veo-3.1-fast-generate-001
+ARIA_MEDIA_ENABLED=false
 ```
 
-Never put a Pollinations `sk_` key or any other provider secret in the APK, a public GitHub commit, or an Android setting. Pollinations model availability, prices and key permissions may change. Check https://gen.pollinations.ai/docs and https://enter.pollinations.ai. Image/video generation is not automatically included in a free chat allowance.
+Leave `ARIA_VIDEO_API_KEY` blank to reuse `ARIA_API_KEY`. The adapter creates a job, polls `GET /v1/videos/{id}`, then downloads `GET /v1/videos/{id}/content`. If a job times out while still processing, do not submit again until you check the provider dashboard; a duplicate request may create a second billable job.
 
-Current app caps: up to 3 images and 1 video per device per 24 hours; global caps are 30 images and 8 videos per 24 hours. These count caps do not guarantee a spending ceiling. Configure a provider-side budget, begin with `ARIA_MEDIA_ENABLED=false`, and only enable it after checking actual prices.
+Official guide: https://docs.avalai.org/fa/guides/generate-videos-using-veo
+
+## Usage limits and spending protection
+
+The app's current defaults limit each guest to 3 images and 1 video per rolling 24 hours, plus global daily ceilings. These are request-count limits, **not a guaranteed money cap**. Keep `ARIA_MEDIA_ENABLED=false` until provider-side budget controls are enabled and tested. Start by manually testing one low-cost image, then one 4-second fast video. Never publish a public media endpoint without account limits and server-side charge tracking.
 
 ## Small VPS in Iran
 
@@ -102,7 +109,7 @@ Prices seen in provider pages on 30 October 2026 (check the final checkout total
 Before paying, ask the hosting provider to confirm:
 1. SSH/root access and Docker support.
 2. A public IPv4 address and DNS for your subdomain.
-3. Outbound HTTPS access to the chosen AI provider (for example `api.avalai.ir`) and Pollinations (`gen.pollinations.ai`).
+3. Outbound HTTPS access to the chosen AI provider (for example `api.avalai.ir`) and AvalAI (`api.avalai.ir`).
 4. A test period or refund if outbound routes are blocked.
 5. Persistent storage and backups for `/data/aria_cloud.db`.
 
@@ -128,7 +135,7 @@ Set `ARIA_DOMAIN` to your real subdomain. Enter the real API keys in `.env` on t
 2. Confirm `image_enabled` and `video_enabled` only after setting the separate server-side keys and enabling media.
 3. Open the app; it registers a guest token automatically.
 4. Send a short Persian message in Chat mode and check the response.
-5. Try one image with a small budget. Try one short video only after Pollinations is configured.
+5. Try one image with a small budget. Try one 4-second clip only after the AvalAI video key and budget are configured.
 
 ## Important limitations
 
