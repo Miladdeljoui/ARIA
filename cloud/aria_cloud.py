@@ -54,7 +54,7 @@ ARIA_IMAGE_MODEL = os.getenv(
     "ARIA_IMAGE_MODEL",
     "muse-image-1.0" if ARIA_PROVIDER == "avalai" else ("gpt-image-2" if ARIA_PROVIDER == "doona" else ""),
 ).strip()
-ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "sora-2").strip()
+ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "veo-3.1-fast-generate-001").strip()
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
 
@@ -83,7 +83,7 @@ class ImageRequest(BaseModel):
 
 class VideoRequest(BaseModel):
     prompt: str = Field(min_length=2, max_length=4000)
-    duration: int = Field(default=5, ge=3, le=8)
+    duration: int = Field(default=4, ge=4, le=8)
     aspect_ratio: str = Field(default="16:9", pattern=r"^(16:9|9:16|1:1)$")
 
 
@@ -576,6 +576,8 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
             json={
                 "model": ARIA_IMAGE_MODEL,
                 "prompt": payload.prompt.strip(),
+                "size": "1024x1024",
+                "quality": "medium",
                 "n": 1,
             },
             timeout=180,
