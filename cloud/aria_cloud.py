@@ -493,7 +493,7 @@ def chat(
             except requests.RequestException as exc:
                 raise HTTPException(
                     status_code=503,
-                    detail=f"cloud_ai_not_configured: set ARIA_API_KEY for provider {ARIA_PROVIDER}",
+                    detail="cloud_ai_not_configured",
                 ) from exc
             answer = ask_ollama(messages)
     except RuntimeError as exc:
