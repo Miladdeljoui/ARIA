@@ -303,11 +303,11 @@ private fun AriaApp(
                 val configured = server.optBoolean("cloud_ai_configured", false)
                 val provider = server.optString("ai_provider", "cloud").uppercase(Locale.ROOT)
                 updateUi {
-                    onlineMode = if (configured) provider else "SERVER"
+                    onlineMode = if (configured) provider else "NO AI"
                     status = if (configured) {
-                        "سرور پاسخ می‌دهد؛ موتور $provider تنظیم شده است."
+                        "سرور آماده است؛ موتور $provider فعال است."
                     } else {
-                        "سرور در دسترس است، اما کلید موتور هوش مصنوعی هنوز تنظیم نشده؛ مسیر رایگان جایگزین هنگام ارسال امتحان می‌شود."
+                        "سرور پاسخ می‌دهد، اما کلید API روی سرور تنظیم نشده است. مدیر باید ARIA_API_KEY را ثبت کند."
                     }
                 }
             } catch (error: Exception) {
@@ -414,7 +414,7 @@ private fun AriaApp(
             mediaExecutor.execute {
                 try {
                     val token = guestToken()
-                    val media = api.generateVideo(cloudUrl.trimEnd('/'), token, prompt, duration = 5)
+                    val media = api.generateVideo(cloudUrl.trimEnd('/'), token, prompt, duration = 4)
                     val base64 = media.optString("video_base64")
                     if (base64.isBlank()) throw IllegalStateException("سرور کلیپ آماده برنگرداند.")
                     val videoUri = api.saveVideoBase64(context, base64)
@@ -453,16 +453,12 @@ private fun AriaApp(
                 }
 
                 if (response == null) {
-                    try {
-                        response = api.freeChat(prompt, history)
-                        source = "OVH جایگزین"
-                    } catch (directError: Exception) {
-                        val serverMessage = serverError?.message?.takeIf { it.isNotBlank() }
-                            ?: "سرور ARIA در دسترس نیست."
-                        throw IllegalStateException("$serverMessage\nمسیر جایگزین هم پاسخ نداد: ${directError.message ?: "خطای ارتباط"}")
-                    }
+                    val serverMessage = serverError?.message?.takeIf { it.isNotBlank() }
+                        ?: "سرور ARIA در دسترس نیست."
+                    throw IllegalStateException(
+                        "$serverMessage\nبرای حفظ حریم خصوصی، پیام فقط از سرور تنظیم‌شده عبور می‌کند؛ اتصال مستقیم بدون حساب غیرفعال است."
+                    )
                 }
-                if (response == null) throw IllegalStateException("مدل هوش مصنوعی پاسخ نداد.")
                 val result = response!!
                 val approval = if (result.requiresApproval) "\n\nنیازمند تأیید مالک · ${result.permissionLevel}" else ""
                 updateUi {
@@ -693,7 +689,7 @@ private fun AriaApp(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("چت مستقیم و رایگان", color = AriaCyan, fontWeight = FontWeight.SemiBold)
+                    Text("اتصال امن به موتور هوش مصنوعی", color = AriaCyan, fontWeight = FontWeight.SemiBold)
                     Text("آزمایشگاه GPU در Molab", color = AriaCyan, fontWeight = FontWeight.SemiBold)
                     Text(
                         "این محیط برای آزمایش شخصی مدل‌ها در Notebook است؛ GPU آن به چت یا ساخت رسانهٔ ARIA وصل نمی‌شود و نباید به API عمومی یا پراکسی تبدیل شود.",
@@ -710,7 +706,7 @@ private fun AriaApp(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("بازکردن آزمایشگاه Molab") }
-                    Text("چت از موتور رایگان مستقل از سرور ARIA استفاده می‌کند. کد شش‌رقمی جفت‌سازی لازم نیست.", color = AriaMuted)
+                    Text("اتصال مهمان به‌صورت خودکار انجام می‌شود و کد شش‌رقمی ندارد. پیام‌ها از سرور ARIA و کلید خصوصی مدیر به سرویس مدل فرستاده می‌شوند.", color = AriaMuted)
                     OutlinedTextField(
                         value = cloudUrl,
                         onValueChange = { cloudUrl = it.trim() },
