@@ -270,6 +270,7 @@ private fun AriaApp(
     var message by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("هسته باز است — به آرامی مشاهده می‌کند") }
     var onlineMode by remember { mutableStateOf("STANDBY") }
+    var activeModel by remember { mutableStateOf("در حال بررسی") }
     val messages = remember { mutableStateListOf<ChatItem>() }
 
     val tts = remember {
@@ -295,7 +296,7 @@ private fun AriaApp(
         )
     }
 
-    LaunchedEffect(cloudUrl) {
+    LaunchedEffect(Unit) {
         status = "در حال بررسی اتصال ARIA…"
         executor.execute {
             try {
@@ -311,6 +312,7 @@ private fun AriaApp(
                 ).uppercase(Locale.ROOT)
                 val model = server.optString("api_model", server.optString("model", ""))
                 updateUi {
+                    activeModel = model.ifBlank { if (chatReady) provider else "بدون مدل فعال" }
                     onlineMode = if (chatReady) provider else "NO AI"
                     status = when {
                         chatReady -> "چت آماده است · " + provider + " " + model
@@ -385,6 +387,7 @@ private fun AriaApp(
                 val model = server.optString("api_model", server.optString("model", ""))
                 updateUi {
                     cloudToken = token
+                    activeModel = model.ifBlank { if (aiReady) provider else "بدون مدل فعال" }
                     onlineMode = if (aiReady) provider.uppercase(Locale.ROOT) else "NO AI"
                     status = if (aiReady) {
                         "چت آماده است · " + provider + " " + model
@@ -584,6 +587,7 @@ private fun AriaApp(
                     fontWeight = FontWeight.Medium
                 )
                 Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                Text("مدل فعال: " + activeModel, color = Color(0xFF9AB6D8), style = MaterialTheme.typography.labelSmall)
                 if (voiceStatus != "آماده") Text(voiceStatus, color = Color(0xFF9DABCA), style = MaterialTheme.typography.labelSmall)
             }
 
