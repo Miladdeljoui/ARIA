@@ -885,11 +885,12 @@ def generate_video(payload: VideoRequest, x_aria_token: str = Header(default="")
         create_response = requests.post(
             ARIA_VIDEO_API_URL,
             headers=headers,
-            json={
-                "model": ARIA_VIDEO_MODEL,
-                "prompt": payload.prompt.strip(),
-                "size": size,
-                "seconds": str(payload.duration),
+            # AvalAI's Videos API expects multipart/form-data, not JSON.
+            files={
+                "model": (None, ARIA_VIDEO_MODEL),
+                "prompt": (None, payload.prompt.strip()),
+                "size": (None, size),
+                "seconds": (None, str(payload.duration)),
             },
             timeout=60,
         )
