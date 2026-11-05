@@ -30,3 +30,13 @@ services:
         value: /tmp/aria_cloud.db
       - key: ARIA_OWNER_NAME
         value: Milad
+      - key: ARIA_PUBLIC_BASE_URL
+        value: https://aria-2.weblines.ir
+      - key: ZARINPAL_SANDBOX
+        value: "true"
+      - key: ZARINPAL_MERCHANT_ID
+        sync: false
+      - key: ARIA_TRIAL_DAYS
+        value: "30"
+      - key: ARIA_MONTHLY_PRICE_TOMAN
+        value: "99000"
