@@ -880,11 +880,11 @@ private fun AriaApp(
                                     val sub = api.subscription(cloudUrl.trimEnd('/'), token)
                                     val subStatus = sub.optString("status", "نامشخص")
                                     val granted = sub.optBoolean("access_granted", false)
+                                    val accessLabel = if (granted) "فعال" else "نیازمند تمدید"
                                     val mode = sub.optString("payment", "درگاه تنظیم‌نشده")
                                     updateUi {
                                         status = "وضعیت اشتراک: " + subStatus +
-                                            " · دسترسی: " + if (granted) "فعال" else "نیازمند تمدید" +
-                                            " · درگاه: " + mode
+                                            " · دسترسی: " + accessLabel + " · درگاه: " + mode
                                     }
                                 } catch (error: Exception) {
                                     updateUi { status = "بررسی اشتراک ناموفق بود: " + friendlyError(error) }
