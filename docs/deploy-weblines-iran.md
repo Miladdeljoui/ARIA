@@ -36,7 +36,7 @@ ARIA_PORT=8000
 ARIA_PROVIDER=avalai
 ARIA_API_BASE_URL=https://api.avalai.ir/v1/chat/completions
 ARIA_API_KEY=کلید_خصوصی_AvalAI
-ARIA_MODEL=deepseek-v4-flash
+ARIA_MODEL=deepseek-flash
 
 ARIA_IMAGE_API_URL=https://api.avalai.ir/v1/images/generations
 ARIA_IMAGE_MODEL=muse-image-1.0
@@ -70,7 +70,7 @@ ZARINPAL_MERCHANT_ID=کلید_پذیرنده_درگاه
 - `cloud_ai_configured: true`
 - `chat_ready: true`
 - `api_provider: "avalai"`
-- `api_model: "deepseek-v4-flash"`
+- `api_model: "deepseek-flash"`
 
 بعد در اپ از مسیر تنظیمات، همان دامنه را در «آدرس سرور ARIA» ذخیره و «اتصال مجدد» را بزن. سپس یک پیام کوتاه فارسی بفرست.
 
