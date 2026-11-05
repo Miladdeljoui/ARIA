@@ -71,6 +71,14 @@ class AriaApi {
                 ?: when (detail.ifBlank { errorCode }) {
                     "Not Found", "not_found" ->
                         "مسیر این قابلیت روی سرور پیدا نشد؛ احتمالاً نسخهٔ قدیمی ARIA روی دامنه نصب است. پوشهٔ cloud و فایل Dockerfile باید روی همان دامنه Deploy شوند."
+                    "subscription_required" ->
+                        "دورهٔ آزمایشی این حساب تمام شده است. برای ادامه، اشتراک را از بخش بسته‌ها فعال کن."
+                    "payment_not_configured" ->
+                        "درگاه هنوز روی سرور فعال نشده است؛ مدیر باید شناسهٔ پذیرنده و دامنهٔ HTTPS را تنظیم کند."
+                    "payment_gateway_unavailable" ->
+                        "ارتباط با درگاه پرداخت برقرار نشد. هزینه‌ای پرداخت نشده؛ کمی بعد دوباره تلاش کن."
+                    "payment_request_rejected" ->
+                        "درخواست پرداخت از طرف درگاه پذیرفته نشد. تنظیمات پذیرنده یا حالت آزمایشی را بررسی کن."
                     "ai_provider_not_configured", "hosted_ai_not_configured" ->
                         "کلید یا مدل هوش مصنوعی روی سرور تنظیم نشده است؛ ARIA_API_KEY و نام مدل را در بخش Secret بررسی کن."
                     "cloud_ai_not_configured" ->
@@ -240,6 +248,16 @@ class AriaApi {
             method = "GET",
             baseUrl = baseUrl,
             path = "/subscription",
+            token = token
+        )
+    }
+
+    fun createPayment(baseUrl: String, token: String): JSONObject {
+        return request(
+            method = "POST",
+            baseUrl = baseUrl,
+            path = "/billing/request",
+            body = JSONObject(),
             token = token
         )
     }
