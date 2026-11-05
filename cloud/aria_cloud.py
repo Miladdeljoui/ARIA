@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import requests
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 APP_HOST = os.getenv("ARIA_HOST", "0.0.0.0")
@@ -40,6 +41,11 @@ VIDEO_POLL_SECONDS = max(3, min(15, int(os.getenv("ARIA_VIDEO_POLL_SECONDS", "5"
 OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().lower()
 TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
 MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
+ZARINPAL_SANDBOX = os.getenv("ZARINPAL_SANDBOX", "true").strip().lower() in {"1", "true", "yes", "on"}
+ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID", "").strip()
+ZARINPAL_BASE_URL = "https://sandbox.zarinpal.com" if ZARINPAL_SANDBOX else "https://payment.zarinpal.com"
+ZARINPAL_STARTPAY_BASE = "https://sandbox.zarinpal.com/pg/StartPay" if ZARINPAL_SANDBOX else "https://www.zarinpal.com/pg/StartPay"
+ARIA_PUBLIC_BASE_URL = os.getenv("ARIA_PUBLIC_BASE_URL", "").strip().rstrip("/")
 GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.com/repos/Miladdeljoui/ARIA/releases/latest")
 DEFAULT_REMOTE_MODEL = {
     # DeepSeek V4 Flash is currently listed in AvalAI's catalog and priced for
@@ -150,6 +156,20 @@ def db() -> sqlite3.Connection:
     )
     connection.execute(
         """
+        CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id INTEGER NOT NULL,
+            authority TEXT NOT NULL UNIQUE,
+            amount_rial INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            ref_id TEXT,
+            created_at INTEGER NOT NULL,
+            verified_at INTEGER
+        )
+        """
+    )
+    connection.execute(
+        """
         CREATE TABLE IF NOT EXISTS feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             device_id INTEGER NOT NULL,
@@ -189,6 +209,42 @@ def device_id_from_token(token: str) -> int | None:
             (token_hash,),
         ).fetchone()
         return int(row[0]) if row else None
+
+
+def subscription_access(device_id: int, now: int | None = None) -> tuple[bool, dict]:
+    current = int(now or time.time())
+    with closing(db()) as connection:
+        device = connection.execute(
+            "SELECT created_at FROM devices WHERE id = ?", (device_id,)
+        ).fetchone()
+        if not device:
+            return False, {}
+        started_at = int(device[0])
+        connection.execute(
+            """INSERT OR IGNORE INTO subscriptions(device_id, trial_started_at, paid_until)
+               VALUES (?, ?, 0)""",
+            (device_id, started_at),
+        )
+        row = connection.execute(
+            "SELECT trial_started_at, paid_until FROM subscriptions WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        connection.commit()
+    trial_started_at, paid_until = int(row[0]), int(row[1])
+    trial_ends_at = trial_started_at + TRIAL_DAYS * 86400
+    trial_active = current < trial_ends_at
+    paid_active = current < paid_until
+    return (trial_active or paid_active), {
+        "status": "paid" if paid_active else ("trial" if trial_active else "expired"),
+        "trial_days": TRIAL_DAYS,
+        "trial_started_at": trial_started_at,
+        "trial_ends_at": trial_ends_at,
+        "paid_until": paid_until,
+        "monthly_price_toman": MONTHLY_PRICE_TOMAN,
+        "payment_enabled": bool(ZARINPAL_MERCHANT_ID and ARIA_PUBLIC_BASE_URL),
+        "payment": "zarinpal_sandbox" if ZARINPAL_SANDBOX else "zarinpal_live",
+        "access_granted": trial_active or paid_active,
+    }
 
 
 def system_message() -> dict:
@@ -407,40 +463,180 @@ def guest(payload: GuestRequest, request: Request):
 
 @app.get("/subscription")
 def subscription(x_aria_token: str = Header(default="")):
-    """Server-calculated trial status. Owner exemption waits for verified Google identity."""
     device_id = device_id_from_token(x_aria_token)
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
+    _, snapshot = subscription_access(device_id)
+    snapshot["owner_email_verification"] = "not_implemented"
+    return snapshot
+
+
+@app.post("/billing/request")
+def create_billing_request(x_aria_token: str = Header(default="")):
+    device_id = device_id_from_token(x_aria_token)
+    if device_id is None:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    if not ZARINPAL_MERCHANT_ID or not ARIA_PUBLIC_BASE_URL.startswith("https://"):
+        raise HTTPException(status_code=503, detail="payment_not_configured")
+    if MONTHLY_PRICE_TOMAN < 1000:
+        raise HTTPException(status_code=503, detail="invalid_subscription_price")
+
     now = int(time.time())
+    amount_rial = MONTHLY_PRICE_TOMAN * 10
+
+    # Reuse a pending request for this device for one hour to avoid duplicate invoices.
     with closing(db()) as connection:
-        device = connection.execute(
-            "SELECT created_at FROM devices WHERE id = ?", (device_id,)
+        pending = connection.execute(
+            """SELECT authority, created_at FROM payments
+               WHERE device_id = ? AND status = 'pending' AND created_at > ?
+               ORDER BY id DESC LIMIT 1""",
+            (device_id, now - 3600),
         ).fetchone()
-        connection.execute(
-            """INSERT OR IGNORE INTO subscriptions(device_id, trial_started_at, paid_until)
-               VALUES (?, ?, 0)""",
-            (device_id, int(device[0]) if device else now),
-        )
-        row = connection.execute(
-            "SELECT trial_started_at, paid_until FROM subscriptions WHERE device_id = ?",
-            (device_id,),
-        ).fetchone()
-        connection.commit()
-    started, paid_until = int(row[0]), int(row[1])
-    trial_end = started + TRIAL_DAYS * 86400
-    trial_active = now < trial_end
-    paid_active = now < paid_until
-    return {
-        "status": "paid" if paid_active else ("trial" if trial_active else "expired"),
-        "trial_days": TRIAL_DAYS,
-        "trial_started_at": started,
-        "trial_ends_at": trial_end,
-        "paid_until": paid_until,
-        "monthly_price_toman": MONTHLY_PRICE_TOMAN,
-        "owner_email_verification": "not_implemented",
-        "payment": "zarinpal_sandbox_not_implemented",
-        "access_granted": paid_active or trial_active,
+    if pending:
+        authority = str(pending[0])
+        return {
+            "payment_url": f"{ZARINPAL_STARTPAY_BASE}/{authority}",
+            "authority": authority,
+            "amount_toman": MONTHLY_PRICE_TOMAN,
+            "reused_pending_request": True,
+        }
+
+    callback_url = ARIA_PUBLIC_BASE_URL + "/billing/callback"
+    request_body = {
+        "merchant_id": ZARINPAL_MERCHANT_ID,
+        "amount": amount_rial,
+        "callback_url": callback_url,
+        "description": "اشتراک یک‌ماهه دستیار ARIA",
+        "metadata": {},
     }
+    try:
+        response = requests.post(
+            ZARINPAL_BASE_URL + "/pg/v4/payment/request.json",
+            json=request_body,
+            headers={"Content-Type": "application/json", "User-Agent": "ARIA-Cloud/1.0"},
+            timeout=(10, 25),
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="payment_gateway_unavailable") from exc
+
+    data = payload.get("data") or {}
+    authority = str(data.get("authority", "")).strip()
+    if int(data.get("code", -1)) != 100 or not authority:
+        errors = payload.get("errors") or {}
+        raise HTTPException(
+            status_code=502,
+            detail="payment_request_rejected",
+            headers={"X-ARIA-Payment-Error": str(errors.get("message", data.get("message", "unknown")))[:160]},
+        )
+
+    with closing(db()) as connection:
+        connection.execute(
+            """INSERT INTO payments(device_id, authority, amount_rial, status, created_at)
+               VALUES (?, ?, ?, 'pending', ?)""",
+            (device_id, authority, amount_rial, now),
+        )
+        connection.commit()
+
+    return {
+        "payment_url": f"{ZARINPAL_STARTPAY_BASE}/{authority}",
+        "authority": authority,
+        "amount_toman": MONTHLY_PRICE_TOMAN,
+        "reused_pending_request": False,
+    }
+
+
+@app.get("/billing/callback", response_class=HTMLResponse)
+def zarinpal_callback(Authority: str = "", Status: str = ""):
+    authority = Authority.strip()
+    if not authority:
+        return HTMLResponse("<h2>درخواست پرداخت نامعتبر است.</h2>", status_code=400)
+
+    with closing(db()) as connection:
+        payment = connection.execute(
+            "SELECT id, device_id, amount_rial, status FROM payments WHERE authority = ?",
+            (authority,),
+        ).fetchone()
+    if not payment:
+        return HTMLResponse("<h2>تراکنش در ARIA پیدا نشد.</h2>", status_code=404)
+
+    payment_id, device_id, amount_rial, payment_state = payment
+    if payment_state == "paid":
+        return HTMLResponse("<h2>پرداخت قبلاً تأیید شده است. به برنامه ARIA برگرد.</h2>")
+
+    if Status.strip().upper() != "OK":
+        with closing(db()) as connection:
+            connection.execute(
+                "UPDATE payments SET status = 'cancelled' WHERE id = ? AND status = 'pending'",
+                (payment_id,),
+            )
+            connection.commit()
+        return HTMLResponse("<h2>پرداخت لغو شد. اشتراک فعال نشد.</h2>")
+
+    verify_body = {
+        "merchant_id": ZARINPAL_MERCHANT_ID,
+        "amount": int(amount_rial),
+        "authority": authority,
+    }
+    if not ZARINPAL_MERCHANT_ID:
+        return HTMLResponse("<h2>درگاه پرداخت هنوز در سرور پیکربندی نشده است.</h2>", status_code=503)
+    try:
+        response = requests.post(
+            ZARINPAL_BASE_URL + "/pg/v4/payment/verify.json",
+            json=verify_body,
+            headers={"Content-Type": "application/json", "User-Agent": "ARIA-Cloud/1.0"},
+            timeout=(10, 25),
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError):
+        return HTMLResponse(
+            "<h2>بررسی پرداخت موقتاً ناموفق بود. دوباره پرداخت نکن؛ صفحه را بعداً بازخوانی یا با پشتیبانی تماس بگیر.</h2>",
+            status_code=503,
+        )
+
+    data = payload.get("data") or {}
+    verify_code = int(data.get("code", -1))
+    if verify_code not in (100, 101):
+        with closing(db()) as connection:
+            connection.execute(
+                "UPDATE payments SET status = 'failed' WHERE id = ? AND status = 'pending'",
+                (payment_id,),
+            )
+            connection.commit()
+        return HTMLResponse("<h2>تأیید پرداخت ناموفق بود؛ اشتراک فعال نشد.</h2>", status_code=400)
+
+    now = int(time.time())
+    ref_id = str(data.get("ref_id", ""))
+    with closing(db()) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        current = connection.execute(
+            "SELECT status FROM payments WHERE id = ?", (payment_id,)
+        ).fetchone()
+        if current and current[0] != "paid":
+            connection.execute(
+                """INSERT OR IGNORE INTO subscriptions(device_id, trial_started_at, paid_until)
+                   SELECT id, created_at, 0 FROM devices WHERE id = ?""",
+                (device_id,),
+            )
+            subscription_row = connection.execute(
+                "SELECT paid_until FROM subscriptions WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            old_paid_until = int(subscription_row[0]) if subscription_row else 0
+            new_paid_until = max(now, old_paid_until) + 30 * 86400
+            connection.execute(
+                "UPDATE subscriptions SET paid_until = ? WHERE device_id = ?",
+                (new_paid_until, device_id),
+            )
+            connection.execute(
+                "UPDATE payments SET status = 'paid', ref_id = ?, verified_at = ? WHERE id = ?",
+                (ref_id, now, payment_id),
+            )
+        connection.commit()
+
+    return HTMLResponse("<h2>پرداخت با موفقیت تأیید شد. اشتراک ARIA فعال شد؛ به برنامه برگرد و وضعیت اشتراک را تازه‌سازی کن.</h2>")
 
 
 @app.post("/feedback")
@@ -500,6 +696,9 @@ def chat(
     device_id = device_id_from_token(x_aria_token)
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
+    has_access, _ = subscription_access(device_id)
+    if not has_access:
+        raise HTTPException(status_code=402, detail="subscription_required")
 
     now = int(time.time())
     with closing(db()) as connection:
@@ -569,6 +768,9 @@ def require_media_access(token: str, kind: str) -> int:
     device_id = device_id_from_token(token)
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
+    has_access, _ = subscription_access(device_id)
+    if not has_access:
+        raise HTTPException(status_code=402, detail="subscription_required")
     now = int(time.time())
     # Reserve quota atomically before contacting a paid provider. A failed or
     # timed-out upstream request still consumes one attempt to avoid accidental
