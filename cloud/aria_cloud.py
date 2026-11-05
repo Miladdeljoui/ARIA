@@ -241,8 +241,12 @@ def subscription_access(device_id: int, now: int | None = None) -> tuple[bool, d
         "trial_ends_at": trial_ends_at,
         "paid_until": paid_until,
         "monthly_price_toman": MONTHLY_PRICE_TOMAN,
-        "payment_enabled": bool(ZARINPAL_MERCHANT_ID and ARIA_PUBLIC_BASE_URL),
-        "payment": "zarinpal_sandbox" if ZARINPAL_SANDBOX else "zarinpal_live",
+        "payment_enabled": bool(ZARINPAL_MERCHANT_ID and ARIA_PUBLIC_BASE_URL.startswith("https://")),
+        "payment": (
+            ("zarinpal_sandbox" if ZARINPAL_SANDBOX else "zarinpal_live")
+            if ZARINPAL_MERCHANT_ID and ARIA_PUBLIC_BASE_URL.startswith("https://")
+            else "not_configured"
+        ),
         "access_granted": trial_active or paid_active,
     }
 
@@ -701,7 +705,7 @@ def chat(
     device_id = device_id_from_token(x_aria_token)
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
-    has_access, _ = subscription_access(device_id)
+    has_access, subscription_state = subscription_access(device_id)
     if not has_access:
         raise HTTPException(status_code=402, detail="subscription_required")
 
@@ -715,9 +719,11 @@ def chat(
             "SELECT COUNT(*) FROM messages WHERE role = 'user' AND created_at > ?",
             (now - 86400,),
         ).fetchone()[0]
-    if int(device_usage) >= 10:
-        raise HTTPException(status_code=429, detail="daily_guest_chat_limit")
-    if int(global_usage) >= 45:
+    daily_device_limit = 100 if subscription_state.get("status") == "paid" else 10
+    if int(device_usage) >= daily_device_limit:
+        detail = "daily_paid_chat_limit" if daily_device_limit > 10 else "daily_guest_chat_limit"
+        raise HTTPException(status_code=429, detail=detail)
+    if int(global_usage) >= 250:
         raise HTTPException(status_code=429, detail="daily_service_limit")
 
     messages = chat_messages(request.prompt, request.history)
