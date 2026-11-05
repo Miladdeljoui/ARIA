@@ -579,8 +579,10 @@ def require_media_access(token: str, kind: str) -> int:
             "SELECT COUNT(*) FROM media_usage WHERE kind = ? AND created_at > ?",
             (kind, now - 86400),
         ).fetchone()[0]
+    # Protect the owner's prepaid API balance during the public beta.
+    # These are attempt limits, not a promise of free media generation.
     per_device_cap = 1 if kind == "video" else 3
-    global_cap = 8 if kind == "video" else 30
+    global_cap = 1 if kind == "video" else 5
     if int(count) >= per_device_cap:
         raise HTTPException(status_code=429, detail=f"daily_{kind}_limit")
     if int(global_count) >= global_cap:
