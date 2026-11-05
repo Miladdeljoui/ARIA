@@ -570,7 +570,11 @@ def require_media_access(token: str, kind: str) -> int:
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
     now = int(time.time())
+    # Reserve quota atomically before contacting a paid provider. A failed or
+    # timed-out upstream request still consumes one attempt to avoid accidental
+    # duplicate paid requests on retry.
     with closing(db()) as connection:
+        connection.execute("BEGIN IMMEDIATE")
         count = connection.execute(
             "SELECT COUNT(*) FROM media_usage WHERE device_id = ? AND kind = ? AND created_at > ?",
             (device_id, kind, now - 86400),
@@ -579,24 +583,19 @@ def require_media_access(token: str, kind: str) -> int:
             "SELECT COUNT(*) FROM media_usage WHERE kind = ? AND created_at > ?",
             (kind, now - 86400),
         ).fetchone()[0]
-    # Protect the owner's prepaid API balance during the public beta.
-    # These are attempt limits, not a promise of free media generation.
-    per_device_cap = 1 if kind == "video" else 3
-    global_cap = 1 if kind == "video" else 5
-    if int(count) >= per_device_cap:
-        raise HTTPException(status_code=429, detail=f"daily_{kind}_limit")
-    if int(global_count) >= global_cap:
-        raise HTTPException(status_code=429, detail=f"daily_service_{kind}_limit")
-    return device_id
-
-
-def record_media_use(device_id: int, kind: str) -> None:
-    with closing(db()) as connection:
+        # Conservative beta limits protect prepaid provider credit.
+        per_device_cap = 1 if kind == "video" else 3
+        global_cap = 1 if kind == "video" else 5
+        if int(count) >= per_device_cap:
+            raise HTTPException(status_code=429, detail=f"daily_{kind}_limit")
+        if int(global_count) >= global_cap:
+            raise HTTPException(status_code=429, detail=f"daily_service_{kind}_limit")
         connection.execute(
             "INSERT INTO media_usage(device_id, kind, created_at) VALUES (?, ?, ?)",
-            (device_id, kind, int(time.time())),
+            (device_id, kind, now),
         )
         connection.commit()
+    return device_id
 
 
 @app.post("/media/image")
@@ -632,7 +631,6 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
             mime_type = image_response.headers.get("Content-Type", mime_type)
         if not image_data:
             raise ValueError("image_response_missing_data")
-        record_media_use(device_id, "image")
         return {
             "model": ARIA_IMAGE_MODEL,
             "mime_type": mime_type,
@@ -715,7 +713,6 @@ def generate_video(payload: VideoRequest, x_aria_token: str = Header(default="")
         if len(content_response.content) > 20 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="video_file_too_large")
 
-        record_media_use(device_id, "video")
         return {
             "model": ARIA_VIDEO_MODEL,
             "job_id": video_id,
