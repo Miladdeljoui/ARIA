@@ -91,6 +91,8 @@ class AriaApi {
                         "تعداد اتصال‌های جدید از این شبکه برای امروز زیاد شده است."
                     "daily_guest_chat_limit" ->
                         "سهمیهٔ رایگان امروز این دستگاه تمام شده است."
+                    "daily_paid_chat_limit" ->
+                        "سهمیهٔ ۱۰۰ پیام روزانهٔ اشتراک این دستگاه تمام شده است."
                     "daily_service_limit" ->
                         "سهمیهٔ رایگان روزانهٔ ARIA تمام شده؛ فردا دوباره امتحان کن."
                     "daily_image_limit", "daily_service_image_limit" ->
