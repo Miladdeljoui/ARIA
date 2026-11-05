@@ -525,10 +525,15 @@ def create_billing_request(x_aria_token: str = Header(default="")):
     authority = str(data.get("authority", "")).strip()
     if int(data.get("code", -1)) != 100 or not authority:
         errors = payload.get("errors") or {}
+        gateway_message = (
+            errors.get("message", data.get("message", "unknown"))
+            if isinstance(errors, dict)
+            else str(errors or data.get("message", "unknown"))
+        )
         raise HTTPException(
             status_code=502,
             detail="payment_request_rejected",
-            headers={"X-ARIA-Payment-Error": str(errors.get("message", data.get("message", "unknown")))[:160]},
+            headers={"X-ARIA-Payment-Error": str(gateway_message)[:160]},
         )
 
     with closing(db()) as connection:
