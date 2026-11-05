@@ -69,6 +69,10 @@ class AriaApi {
             val message = parsed?.optString("message")?.takeIf { it.isNotBlank() }
                 ?: parsed?.optString("hint")?.takeIf { it.isNotBlank() }
                 ?: when (detail.ifBlank { errorCode }) {
+                    "Not Found", "not_found" ->
+                        "مسیر این قابلیت روی سرور پیدا نشد؛ احتمالاً نسخهٔ قدیمی ARIA روی دامنه نصب است. پوشهٔ cloud و فایل Dockerfile باید روی همان دامنه Deploy شوند."
+                    "ai_provider_not_configured", "hosted_ai_not_configured" ->
+                        "کلید یا مدل هوش مصنوعی روی سرور تنظیم نشده است؛ ARIA_API_KEY و نام مدل را در بخش Secret بررسی کن."
                     "cloud_ai_not_configured" ->
                         "مدل هوش مصنوعی ابری هنوز تنظیم نشده است."
                     "ai_provider_unavailable_or_invalid_response" ->
