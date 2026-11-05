@@ -6,7 +6,7 @@
 - Backend: `cloud/aria_cloud.py` (FastAPI داخل `cloud/Dockerfile`)
 - درگاه مدل: AvalAI، آدرس اصلی `https://api.avalai.ir/v1/chat/completions`
 - آدرس جایگزین مستند داخل ایران: `https://api.avalapis.ir/v1/chat/completions` (فقط در خطای اتصال)
-- مدل متن پیش‌فرض: `deepseek-v4-flash`
+- مدل متن پیش‌فرض: `deepseek-flash`
 - تصویر: `muse-image-1.0`
 - کلیپ: `veo-3.1-fast-generate-001`
 - تولید رسانه عمداً خاموش است تا صاحب پروژه کلید، اعتبار و سقف هزینه را در سرور تنظیم کند.
