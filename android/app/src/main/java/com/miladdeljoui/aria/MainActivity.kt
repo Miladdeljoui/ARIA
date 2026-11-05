@@ -757,6 +757,10 @@ private fun AriaApp(
                         onClick = { showSettings = false; showFeedback = true },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("ارسال نظر و پیشنهاد") }
+                    OutlinedButton(
+                        onClick = { showSettings = false; showPackages = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("اشتراک و پرداخت") }
                     Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                     Text("چت رایگان به سهمیهٔ مدل وابسته است. ساخت تصویر و کلیپ ممکن است هزینه داشته باشد و فقط پس از فعال‌سازی در سرور کار می‌کند.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                 }
@@ -842,12 +846,57 @@ private fun AriaApp(
             onDismissRequest = { showPackages = false },
             title = { Text("بسته‌های ARIA") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("نسخهٔ آزمایشی ARIA", color = AriaCyan)
-                    Text("پرداخت آنلاین هنوز فعال نیست. این نسخه آزمایشی است؛ برای قابلیت‌های ابری یا رسانه‌های پولی، تا راه‌اندازی پرداخت از کاربران پول نگیر.")
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("اشتراک یک‌ماههٔ ARIA", color = AriaCyan, fontWeight = FontWeight.SemiBold)
+                    Text("۳۰ روز آزمایشی برای نصب جدید؛ پس از پایان دوره، تمدید ماهانه ۹۹٬۰۰۰ تومان است.")
+                    Text("پرداخت از طریق درگاه زرین‌پال انجام می‌شود. تا وقتی مدیر، شناسهٔ پذیرنده را در سرور تنظیم نکرده باشد، پرداخت فعال نخواهد شد.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = {
+                            executor.execute {
+                                try {
+                                    val token = guestToken()
+                                    val payment = api.createPayment(cloudUrl.trimEnd('/'), token)
+                                    val url = payment.optString("payment_url", "")
+                                    if (!url.startsWith("https://")) {
+                                        throw IllegalStateException("نشانی امن درگاه پرداخت دریافت نشد.")
+                                    }
+                                    updateUi {
+                                        showPackages = false
+                                        status = "درگاه پرداخت باز شد؛ بعد از بازگشت، وضعیت اشتراک را بررسی کن."
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    }
+                                } catch (error: Exception) {
+                                    updateUi { status = "ساخت درخواست پرداخت ناموفق بود: " + friendlyError(error) }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("ادامه به درگاه پرداخت") }
+                    OutlinedButton(
+                        onClick = {
+                            executor.execute {
+                                try {
+                                    val token = guestToken()
+                                    val sub = api.subscription(cloudUrl.trimEnd('/'), token)
+                                    val subStatus = sub.optString("status", "نامشخص")
+                                    val granted = sub.optBoolean("access_granted", false)
+                                    val mode = sub.optString("payment", "درگاه تنظیم‌نشده")
+                                    updateUi {
+                                        status = "وضعیت اشتراک: " + subStatus +
+                                            " · دسترسی: " + if (granted) "فعال" else "نیازمند تمدید" +
+                                            " · درگاه: " + mode
+                                    }
+                                } catch (error: Exception) {
+                                    updateUi { status = "بررسی اشتراک ناموفق بود: " + friendlyError(error) }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("بررسی وضعیت اشتراک") }
+                    Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
                 }
             },
-            confirmButton = { Button(onClick = { showPackages = false }) { Text("متوجه شدم") } },
+            confirmButton = { Button(onClick = { showPackages = false }) { Text("بستن") } },
             containerColor = AriaPanel,
             titleContentColor = AriaCyan,
             textContentColor = AriaText
