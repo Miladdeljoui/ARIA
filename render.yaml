@@ -15,7 +15,7 @@ services:
       - key: ARIA_API_KEY
         sync: false
       - key: ARIA_MODEL
-        value: deepseek-v4-flash
+        value: deepseek-flash
       - key: ARIA_IMAGE_API_URL
         value: https://api.avalai.ir/v1/images/generations
       - key: ARIA_IMAGE_MODEL
