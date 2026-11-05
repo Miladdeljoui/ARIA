@@ -42,7 +42,9 @@ TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
 MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
 GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.com/repos/Miladdeljoui/ARIA/releases/latest")
 DEFAULT_REMOTE_MODEL = {
-    "avalai": "gpt-5.4-nano",
+    # DeepSeek V4 Flash is currently listed in AvalAI's catalog and priced for
+    # low-cost API use. Keep the model override server-side via ARIA_MODEL.
+    "avalai": "deepseek-v4-flash",
     "doona": "gemini-3.5-flash-lite",
     "1xai": "deepseek-chat",
     "heroai": "deepseek/deepseek-chat",
@@ -215,25 +217,53 @@ def chat_messages(prompt: str, history: list[dict]) -> list[dict]:
     return [system_message(), *safe_history, {"role": "user", "content": prompt}]
 
 
-def ask_hosted_api(messages: list[dict]) -> str:
+def hosted_chat_request(messages: list[dict]) -> requests.Response:
+    """Call the configured OpenAI-compatible provider.
+
+    AvalAI documents two domestic API hostnames. If DNS/connection setup for
+    the primary hostname fails before a response is received, retry the same
+    request at the documented domestic fallback. Never retry HTTP errors or
+    read timeouts: the provider may already have accepted and billed a request.
+    """
     if not ARIA_API_BASE_URL or not ARIA_API_KEY:
         raise RuntimeError("hosted_ai_not_configured")
-    response = requests.post(
-        ARIA_API_BASE_URL,
-        headers={
-            "Authorization": f"Bearer {ARIA_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": MODEL,
-            "messages": messages,
-            "stream": False,
-        },
-        timeout=90,
-    )
+
+    urls = [ARIA_API_BASE_URL]
+    if ARIA_PROVIDER == "avalai":
+        fallback = ARIA_API_BASE_URL.replace("api.avalai.ir", "api.avalapis.ir")
+        if fallback != ARIA_API_BASE_URL:
+            urls.append(fallback)
+
+    last_error = None
+    for endpoint in urls:
+        try:
+            return requests.post(
+                endpoint,
+                headers={
+                    "Authorization": f"Bearer {ARIA_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": MODEL,
+                    "messages": messages,
+                    "stream": False,
+                },
+                timeout=(12, 90),
+            )
+        except (requests.ConnectionError, requests.ConnectTimeout) as exc:
+            last_error = exc
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("hosted_ai_unavailable")
+
+
+def ask_hosted_api(messages: list[dict]) -> str:
+    response = hosted_chat_request(messages)
     response.raise_for_status()
     payload = response.json()
-    answer = payload["choices"][0]["message"]["content"]
+    choices = payload.get("choices") or []
+    answer = choices[0].get("message", {}).get("content", "") if choices else ""
     if not isinstance(answer, str) or not answer.strip():
         raise ValueError("empty_model_response")
     return answer.strip()
@@ -264,6 +294,8 @@ def home():
         "health": "/status",
         "chat": "/chat",
         "cloud_ai_configured": hosted_ai_configured(),
+        "api_provider": ARIA_PROVIDER if hosted_ai_configured() else "none",
+        "api_model": MODEL,
         "anonymous_guest_access": True,
         "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or ARIA_VIDEO_API_KEY),
         "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY and ARIA_IMAGE_API_URL and ARIA_IMAGE_MODEL),
@@ -290,6 +322,8 @@ def status():
         "cloud": True,
         "ollama": ollama_ok,
         "cloud_ai_configured": hosted_ai_configured(),
+        "api_provider": ARIA_PROVIDER if hosted_ai_configured() else "none",
+        "api_model": MODEL,
         "anonymous_guest_access": True,
         "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or ARIA_VIDEO_API_KEY),
         "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY and ARIA_IMAGE_API_URL and ARIA_IMAGE_MODEL),
