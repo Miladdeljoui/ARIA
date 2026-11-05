@@ -48,8 +48,8 @@ ZARINPAL_STARTPAY_BASE = "https://sandbox.zarinpal.com/pg/StartPay" if ZARINPAL_
 ARIA_PUBLIC_BASE_URL = os.getenv("ARIA_PUBLIC_BASE_URL", "").strip().rstrip("/")
 GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.com/repos/Miladdeljoui/ARIA/releases/latest")
 DEFAULT_REMOTE_MODEL = {
-    # DeepSeek V4 Flash is currently listed in AvalAI's catalog and priced for
-    # low-cost API use. Keep the model override server-side via ARIA_MODEL.
+    # AvalAI's current DeepSeek V4.1 Flash alias. Keep the model override
+    # server-side via ARIA_MODEL; never assume a legacy model ID is permanent.
     "avalai": "deepseek-flash",
     "doona": "gemini-3.5-flash-lite",
     "1xai": "deepseek-chat",
