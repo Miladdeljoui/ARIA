@@ -301,13 +301,21 @@ private fun AriaApp(
             try {
                 val server = api.status(cloudUrl.trimEnd('/'))
                 val configured = server.optBoolean("cloud_ai_configured", false)
-                val provider = server.optString("ai_provider", "cloud").uppercase(Locale.ROOT)
+                val chatReady = server.optBoolean(
+                    "chat_ready",
+                    configured || server.optBoolean("ollama", false)
+                )
+                val provider = server.optString(
+                    "ai_provider",
+                    server.optString("api_provider", "cloud")
+                ).uppercase(Locale.ROOT)
+                val model = server.optString("api_model", server.optString("model", ""))
                 updateUi {
-                    onlineMode = if (configured) provider else "NO AI"
-                    status = if (configured) {
-                        "سرور آماده است؛ موتور $provider فعال است."
-                    } else {
-                        "سرور پاسخ می‌دهد، اما کلید API روی سرور تنظیم نشده است. مدیر باید ARIA_API_KEY را ثبت کند."
+                    onlineMode = if (chatReady) provider else "NO AI"
+                    status = when {
+                        chatReady -> "چت آماده است · " + provider + " " + model
+                        configured -> "کلید تنظیم شده، اما موتور چت آماده نیست؛ لاگ و اعتبار سرویس مدل را بررسی کن."
+                        else -> "سرور پاسخ می‌دهد، اما کلید API تنظیم نشده است. ARIA_API_KEY باید در بخش Secret سرور ثبت شود."
                     }
                 }
             } catch (error: Exception) {
@@ -369,11 +377,20 @@ private fun AriaApp(
             try {
                 val token = guestToken(forceRegister = true)
                 val server = api.status(cloudUrl.trimEnd('/'))
-                val aiReady = server.optBoolean("cloud_ai_configured", false) || server.optBoolean("ollama", false)
+                val aiReady = server.optBoolean(
+                    "chat_ready",
+                    server.optBoolean("cloud_ai_configured", false) || server.optBoolean("ollama", false)
+                )
+                val provider = server.optString("ai_provider", server.optString("api_provider", "cloud"))
+                val model = server.optString("api_model", server.optString("model", ""))
                 updateUi {
                     cloudToken = token
-                    onlineMode = "CLOUD"
-                    status = if (aiReady) "سرور و موتور هوش مصنوعی آماده‌اند." else "سرور در دسترس است، اما مدل هوش مصنوعی هنوز تنظیم نشده."
+                    onlineMode = if (aiReady) provider.uppercase(Locale.ROOT) else "NO AI"
+                    status = if (aiReady) {
+                        "چت آماده است · " + provider + " " + model
+                    } else {
+                        "توکن مهمان ساخته شد، اما موتور چت هنوز آماده نیست؛ کلید و اعتبار API را در سرور بررسی کن."
+                    }
                 }
             } catch (error: Exception) {
                 updateUi { onlineMode = "STANDBY"; status = "اتصال ناموفق: " + friendlyError(error) }
