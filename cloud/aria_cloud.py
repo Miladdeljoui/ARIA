@@ -50,7 +50,7 @@ GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.
 DEFAULT_REMOTE_MODEL = {
     # DeepSeek V4 Flash is currently listed in AvalAI's catalog and priced for
     # low-cost API use. Keep the model override server-side via ARIA_MODEL.
-    "avalai": "deepseek-v4-flash",
+    "avalai": "deepseek-flash",
     "doona": "gemini-3.5-flash-lite",
     "1xai": "deepseek-chat",
     "heroai": "deepseek/deepseek-chat",
