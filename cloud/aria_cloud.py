@@ -630,11 +630,15 @@ def zarinpal_callback(Authority: str = "", Status: str = ""):
                 (device_id,),
             )
             subscription_row = connection.execute(
-                "SELECT paid_until FROM subscriptions WHERE device_id = ?",
+                "SELECT paid_until, trial_started_at FROM subscriptions WHERE device_id = ?",
                 (device_id,),
             ).fetchone()
             old_paid_until = int(subscription_row[0]) if subscription_row else 0
-            new_paid_until = max(now, old_paid_until) + 30 * 86400
+            trial_ends_at = (
+                int(subscription_row[1]) + TRIAL_DAYS * 86400
+                if subscription_row else now
+            )
+            new_paid_until = max(now, old_paid_until, trial_ends_at) + 30 * 86400
             connection.execute(
                 "UPDATE subscriptions SET paid_until = ? WHERE device_id = ?",
                 (new_paid_until, device_id),
