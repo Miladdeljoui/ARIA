@@ -8,12 +8,22 @@ services:
     dockerContext: ./cloud
     healthCheckPath: /status
     envVars:
+      - key: ARIA_PROVIDER
+        value: avalai
       - key: ARIA_API_BASE_URL
         value: https://api.avalai.ir/v1/chat/completions
       - key: ARIA_API_KEY
         sync: false
       - key: ARIA_MODEL
-        value: gpt-5.4-nano
+        value: deepseek-v4-flash
+      - key: ARIA_IMAGE_API_URL
+        value: https://api.avalai.ir/v1/images/generations
+      - key: ARIA_IMAGE_MODEL
+        value: muse-image-1.0
+      - key: ARIA_VIDEO_API_URL
+        value: https://api.avalai.ir/v1/videos
+      - key: ARIA_VIDEO_MODEL
+        value: veo-3.1-fast-generate-001
       - key: ARIA_MEDIA_ENABLED
         value: "false"
       - key: ARIA_DB
