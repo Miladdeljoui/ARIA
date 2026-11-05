@@ -85,6 +85,10 @@ class AriaApi {
                         "سهمیهٔ رایگان امروز این دستگاه تمام شده است."
                     "daily_service_limit" ->
                         "سهمیهٔ رایگان روزانهٔ ARIA تمام شده؛ فردا دوباره امتحان کن."
+                    "daily_image_limit", "daily_service_image_limit" ->
+                        "سهمیهٔ ساخت تصویر امروز تمام شده است."
+                    "daily_video_limit", "daily_service_video_limit" ->
+                        "سهمیهٔ ساخت کلیپ امروز تمام شده است."
                     "cloud_ai_not_configured" ->
                         "مدل هوش مصنوعی روی سرور هنوز تنظیم نشده است."
                     "media_generation_disabled_by_server" ->
