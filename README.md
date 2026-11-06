@@ -96,6 +96,10 @@ See [docs/iranian-mcp-integration.md](docs/iranian-mcp-integration.md) for the s
 
 A personal, interactive GPU notebook for testing Qwen3 models is available at [notebooks/aria_molab_gpu_lab.py](notebooks/aria_molab_gpu_lab.py). Read [docs/molab-gpu-lab.md](docs/molab-gpu-lab.md) before use. Molab is not an ARIA backend or public inference API; its acceptable use rules prohibit exposing its compute to external traffic.
 
+## Paperclip agent orchestration
+
+See [docs/paperclip-integration-fa.md](docs/paperclip-integration-fa.md) for the Persian integration plan. Paperclip is an optional, separate control plane for coordinating AI agents; it is not an LLM provider and is not embedded in the Android APK. Deployment and a real agent run are still pending.
+
 ## Iran-compatible cloud deployment
 
 For the current AvalAI-backed cloud configuration and deployment on Weblines Cloud in Iran, see [docs/deploy-weblines-iran.md](docs/deploy-weblines-iran.md). Keep provider keys in hosting secrets, not in the APK or repository. The backend now defaults to DeepSeek V4 Flash through AvalAI, with documented domestic API host fallback. Image/video generation remains disabled until the owner funds the account and intentionally enables it.
