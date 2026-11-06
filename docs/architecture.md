@@ -29,6 +29,17 @@ ARIA should never silently bypass operating-system permissions or security contr
 - **Android companion**: voice UI, notifications, device status, local network bridge.
 - **Optional server**: remote relay, heavier model, scheduled jobs, web-connected research.
 
+## Optional agent orchestration
+
+Paperclip may run as a separate web service for agent roles, goals, tasks, heartbeats, budgets, approvals, and execution history. It does not replace the ARIA chat/media API or provide model inference by itself.
+
+- Android chat, memory, user access, and image/video API remain owned by ARIA.
+- Paperclip agents connect to model providers through their runtime adapters; AvalAI is the first Iran-compatible provider candidate already documented by this repository.
+- Paperclip must be deployed independently with persistent storage, HTTPS, authentication, and server-side secrets.
+- No agent receives production credentials or unrestricted filesystem/deployment access by default. Sensitive operations require owner approval.
+
+Implementation status: documented integration path only. Hosting Paperclip, verifying the AvalAI adapter, and adding an authenticated in-app entry point are separate tasks.
+
 ## Future capabilities
 
 - Persian voice conversation
