@@ -177,7 +177,7 @@ private fun GuestSignInScreen(
 
     Box(
         modifier = Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xFF10172A), Color(0xFF07101B)))
+            Brush.verticalGradient(listOf(Color(0xFFF7F6F2), Color(0xFFF0EDE7)))
         ),
         contentAlignment = Alignment.Center
     ) {
@@ -187,7 +187,7 @@ private fun GuestSignInScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text("ARIA", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Text("دستیار هوشمند شخصی تو", color = Color(0xFFB8C5D9))
+            Text("دستیار هوشمند شخصی تو", color = Color(0xFF77716A))
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
                 onClick = { error = "ورود گوگل هنوز به سرویس OAuth متصل نشده است." },
@@ -195,7 +195,7 @@ private fun GuestSignInScreen(
             ) {
                 Text("G  ورود با حساب گوگل")
             }
-            Text("یا ورود مهمان رایگان", color = Color(0xFF7DE3D1))
+            Text("یا ورود مهمان رایگان", color = Color(0xFFB76A4D))
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it; error = "" },
@@ -211,7 +211,7 @@ private fun GuestSignInScreen(
                 singleLine = true
             )
             if (error.isNotBlank()) {
-                Text(error, color = Color(0xFFFFB4AB))
+                Text(error, color = Color(0xFFB42318))
             }
             Button(
                 onClick = {
@@ -229,7 +229,7 @@ private fun GuestSignInScreen(
             }
             Text(
                 "نام و شماره فعلاً فقط روی همین گوشی ذخیره می‌شوند؛ پیامک تأیید ارسال نمی‌شود.",
-                color = Color(0xFF9BAAC0),
+                color = Color(0xFF77716A),
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -271,6 +271,9 @@ private fun AriaApp(
     var status by remember { mutableStateOf("هسته باز است — به آرامی مشاهده می‌کند") }
     var onlineMode by remember { mutableStateOf("STANDBY") }
     var activeModel by remember { mutableStateOf("در حال بررسی") }
+    var selectedModel by remember { mutableStateOf(prefs.getString("selected_model", "") ?: "") }
+    var availableModels by remember { mutableStateOf(listOf<String>()) }
+    var showModelPicker by remember { mutableStateOf(false) }
     val messages = remember { mutableStateListOf<ChatItem>() }
 
     val tts = remember {
@@ -373,6 +376,32 @@ private fun AriaApp(
         return token
     }
 
+    fun refreshModels() {
+        executor.execute {
+            try {
+                val token = guestToken()
+                val catalogue = api.models(cloudUrl.trimEnd('/'), token)
+                val array = catalogue.optJSONArray("models")
+                val discovered = if (array == null) emptyList() else
+                    (0 until array.length()).mapNotNull { index ->
+                        array.optString(index).takeIf { it.isNotBlank() }
+                    }
+                updateUi {
+                    availableModels = discovered
+                    if (selectedModel.isBlank()) {
+                        selectedModel = catalogue.optString("default_model", activeModel)
+                    }
+                    if (discovered.isEmpty()) status = "مدلی از سرور دریافت نشد."
+                }
+            } catch (error: Exception) {
+                updateUi {
+                    if (availableModels.isEmpty()) availableModels = listOf(activeModel).filter { it.isNotBlank() }
+                    status = "دریافت فهرست مدل‌ها ناموفق بود: " + friendlyError(error)
+                }
+            }
+        }
+    }
+
     fun reconnectCloud() {
         status = "در حال اتصال خودکار به سرور ARIA…"
         executor.execute {
@@ -458,7 +487,7 @@ private fun AriaApp(
                 try {
                     var token = guestToken()
                     try {
-                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
+                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history, selectedModel)
                     } catch (firstError: Exception) {
                         if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
                             token = guestToken(forceRegister = true)
@@ -506,7 +535,7 @@ private fun AriaApp(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF171715), Color(0xFF1C1B19), Color(0xFF171715))
+                    listOf(Color(0xFFF8F7F4), Color(0xFFF8F7F4), Color(0xFFF8F7F4))
                 )
             )
     ) {
@@ -522,21 +551,21 @@ private fun AriaApp(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(
                         modifier = Modifier.size(42.dp).clip(CircleShape)
-                            .background(Brush.radialGradient(listOf(Color(0xFFE9A17A), Color(0xFFC66A49), Color(0xFF34201A)))),
+                            .background(Brush.radialGradient(listOf(Color(0xFFE9A17A), Color(0xFFC66A49), Color(0xFFB86647)))),
                         contentAlignment = Alignment.Center
                     ) {
                         Text("A", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text("ARIA", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F7FF))
-                        Text("دستیار هوشمند فارسی", color = Color(0xFF9AB6D8), style = MaterialTheme.typography.labelSmall)
+                        Text("ARIA", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF29231F))
+                        Text("دستیار هوشمند فارسی", color = Color(0xFF736C65), style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
-                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF2B2926)).padding(horizontal = 10.dp, vertical = 7.dp)
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFEDE9E3)).padding(horizontal = 10.dp, vertical = 7.dp)
                     ) {
-                        Text(onlineMode, color = Color(0xFFE5A080), style = MaterialTheme.typography.labelSmall)
+                        Text(onlineMode, color = Color(0xFFB96C4B), style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedButton(onClick = { messages.clear(); composerMode = "chat"; message = "" }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)) { Text("＋") }
                     OutlinedButton(onClick = { showSettings = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)) { Text("تنظیمات") }
@@ -550,13 +579,13 @@ private fun AriaApp(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Box(
-                        modifier = Modifier.size(56.dp).clip(CircleShape).background(Color(0xFF36271F)),
+                        modifier = Modifier.size(56.dp).clip(CircleShape).background(Color(0xFFF1E5DE)),
                         contentAlignment = Alignment.Center
-                    ) { Text("✳", color = Color(0xFFE5A080), style = MaterialTheme.typography.headlineMedium) }
+                    ) { Text("✳", color = Color(0xFFB96C4B), style = MaterialTheme.typography.headlineMedium) }
                     Spacer(Modifier.height(20.dp))
-                    Text("سلام! من آریا هستم.", color = Color(0xFFF4F7FF), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    Text("سلام! من آریا هستم.", color = Color(0xFF29231F), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
-                    Text("امروز چه چیزی را با هم حل کنیم؟", color = Color(0xFFAAB7D0))
+                    Text("امروز چه چیزی را با هم حل کنیم؟", color = Color(0xFF736D66))
                     Spacer(Modifier.height(18.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { message = "یک برنامهٔ یادگیری هوش مصنوعی برای من طراحی کن." }) { Text("یادگیری AI") }
@@ -569,13 +598,13 @@ private fun AriaApp(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text("گفت‌وگو", color = AriaText, fontWeight = FontWeight.SemiBold)
-                    Text("گفت‌وگوی فارسی با ARIA", color = Color(0xFF8F9BB5), style = MaterialTheme.typography.labelSmall)
+                    Text("گفت‌وگوی فارسی با ARIA", color = Color(0xFF80776D), style = MaterialTheme.typography.labelSmall)
                 }
             }
 
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xFF22211F)).padding(horizontal = 14.dp, vertical = 10.dp),
+                    .background(Color(0xFFFFFFFF)).padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
@@ -583,12 +612,21 @@ private fun AriaApp(
                         "STANDBY" -> "در انتظار اتصال"
                         else -> "اتصال برقرار است"
                     },
-                    color = if (onlineMode == "STANDBY") Color(0xFFE5A080) else Color(0xFFB5C9B5),
+                    color = if (onlineMode == "STANDBY") Color(0xFFB96C4B) else Color(0xFF59755B),
                     fontWeight = FontWeight.Medium
                 )
                 Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
-                Text("مدل فعال: " + activeModel, color = Color(0xFF9AB6D8), style = MaterialTheme.typography.labelSmall)
-                if (voiceStatus != "آماده") Text(voiceStatus, color = Color(0xFF9DABCA), style = MaterialTheme.typography.labelSmall)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("مدل فعال: " + selectedModel.ifBlank { activeModel }, color = Color(0xFF736C65), style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                    OutlinedButton(
+                        onClick = {
+                            showModelPicker = true
+                            refreshModels()
+                        },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) { Text("تغییر مدل") }
+                }
+                if (voiceStatus != "آماده") Text(voiceStatus, color = Color(0xFF736D66), style = MaterialTheme.typography.labelSmall)
             }
 
             if (messages.isNotEmpty()) {
@@ -607,10 +645,10 @@ private fun AriaApp(
                             Column(
                                 modifier = Modifier.fillMaxWidth(if (item.owner) 0.88f else 0.96f)
                                     .clip(RoundedCornerShape(18.dp))
-                                    .background(if (item.owner) Color(0xFF2B2926) else Color.Transparent)
+                                    .background(if (item.owner) Color(0xFFEDE9E3) else Color.Transparent)
                                     .padding(horizontal = 12.dp, vertical = 10.dp)
                             ) {
-                                Text(if (item.owner) "شما" else "ARIA", color = if (item.owner) Color(0xFFE5A080) else Color(0xFFBAB2A8), style = MaterialTheme.typography.labelSmall)
+                                Text(if (item.owner) "شما" else "ARIA", color = if (item.owner) Color(0xFFB96C4B) else Color(0xFF736D66), style = MaterialTheme.typography.labelSmall)
                                 Spacer(Modifier.height(5.dp))
                                 Text(item.text, color = AriaText)
                                 val imageBitmap = remember(item.imageBase64) {
@@ -665,7 +703,7 @@ private fun AriaApp(
 
             Row(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                    .background(Color(0xFF242320)).padding(6.dp),
+                    .background(Color(0xFFFFFFFF)).padding(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -695,7 +733,7 @@ private fun AriaApp(
                     shape = CircleShape,
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                     enabled = message.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC87956), contentColor = Color.White)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB96C4B), contentColor = Color.White)
                 ) { Text("➤") }
             }
         }
@@ -772,6 +810,43 @@ private fun AriaApp(
         )
     }
 
+    if (showModelPicker) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showModelPicker = false },
+            title = { Text("انتخاب مدل هوش مصنوعی") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("مدل‌ها از درگاه 1xAi دریافت می‌شوند. هزینهٔ هر مدل از اعتبار کیف پول سرور کم می‌شود.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    if (availableModels.isEmpty()) {
+                        Text("در حال دریافت فهرست مدل‌ها…", color = AriaMuted)
+                    }
+                    availableModels.forEach { model ->
+                        OutlinedButton(
+                            onClick = {
+                                selectedModel = model
+                                prefs.edit().putString("selected_model", model).apply()
+                                showModelPicker = false
+                                status = "مدل انتخاب‌شده: " + model
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text((if (selectedModel == model) "✓  " else "") + model)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                OutlinedButton(onClick = { showModelPicker = false }) { Text("بستن") }
+            },
+            containerColor = AriaPanel,
+            titleContentColor = AriaCyan,
+            textContentColor = AriaText
+        )
+    }
+
     if (showFeedback) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showFeedback = false },
@@ -819,7 +894,7 @@ private fun AriaApp(
                         tokenToUse.isBlank() -> status = "ابتدا اتصال خودکار به سرور را از تنظیمات امتحان کن."
                         else -> executor.execute {
                             try {
-                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.9.1-beta1")
+                                api.sendFeedback(urlToUse, tokenToUse, categoryToSend, messageToSend, "0.9.2-beta1")
                                 updateUi {
                                     status = "نظر تو ثبت شد؛ ممنون از همراهی‌ات!"
                                     feedbackText = ""
