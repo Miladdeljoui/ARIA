@@ -387,6 +387,10 @@ ARIA_ALLOWED_MODELS = [
     for item in os.getenv("ARIA_ALLOWED_MODELS", ",".join(DEFAULT_1XAI_MODELS if ARIA_PROVIDER == "1xai" else [MODEL])).split(",")
     if item.strip()
 ]
+if MODEL not in ARIA_ALLOWED_MODELS:
+    ARIA_ALLOWED_MODELS.insert(0, MODEL)
+if MODEL not in ARIA_ALLOWED_MODELS:
+    ARIA_ALLOWED_MODELS.insert(0, MODEL)
 
 
 @app.get("/")
@@ -787,9 +791,13 @@ def chat(
         raise HTTPException(status_code=429, detail="daily_service_limit")
 
     requested_model = (request.model or "").strip()
-    if requested_model and requested_model not in ARIA_ALLOWED_MODELS:
-        raise HTTPException(status_code=400, detail="model_not_allowed")
-    selected_model = requested_model or MODEL
+    if hosted_ai_configured():
+        if requested_model and requested_model not in ARIA_ALLOWED_MODELS:
+            raise HTTPException(status_code=400, detail="model_not_allowed")
+        selected_model = requested_model or MODEL
+    else:
+        # A local Ollama fallback must ignore cloud-only model IDs.
+        selected_model = MODEL
 
     messages = chat_messages(request.prompt, request.history)
     try:
