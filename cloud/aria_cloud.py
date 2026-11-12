@@ -18,8 +18,9 @@ APP_PORT = int(os.getenv("ARIA_PORT", "8000"))
 OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 # Default to AvalAI: a local-currency, Iran-oriented OpenAI-compatible gateway.
 # Provider credentials stay on the server and are never returned to Android.
-ARIA_PROVIDER = os.getenv("ARIA_PROVIDER", "avalai").strip().lower()
+ARIA_PROVIDER = os.getenv("ARIA_PROVIDER", "1xai").strip().lower()
 DEFAULT_CHAT_URLS = {
+    "1xai": "https://1xai.ir/v1/chat/completions",
     "avalai": "https://api.avalai.ir/v1/chat/completions",
     "doona": "https://platform.doona.ai/v1/chat/completions",
     "1xai": "https://1xai.ir/v1/chat/completions",
@@ -29,13 +30,19 @@ DEFAULT_CHAT_URLS = {
 ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", DEFAULT_CHAT_URLS.get(ARIA_PROVIDER, "")).strip()
 ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEY", "").strip()
 DEFAULT_IMAGE_URLS = {
+    "1xai": "https://1xai.ir/v1/images/generations",
     "avalai": "https://api.avalai.ir/v1/images/generations",
     "doona": "https://platform.doona.ai/v1/images/generations",
 }
 ARIA_IMAGE_API_URL = os.getenv("ARIA_IMAGE_API_URL", DEFAULT_IMAGE_URLS.get(ARIA_PROVIDER, "")).strip()
 ARIA_IMAGE_API_KEY = os.getenv("ARIA_IMAGE_API_KEY", "").strip() or ARIA_API_KEY
-ARIA_VIDEO_API_URL = os.getenv("ARIA_VIDEO_API_URL", "https://api.avalai.ir/v1/videos").strip()
-ARIA_VIDEO_API_KEY = os.getenv("ARIA_VIDEO_API_KEY", "").strip() or ARIA_API_KEY
+ARIA_VIDEO_API_URL = os.getenv(
+    "ARIA_VIDEO_API_URL",
+    "https://api.avalai.ir/v1/videos" if ARIA_PROVIDER == "avalai" else "",
+).strip()
+ARIA_VIDEO_API_KEY = os.getenv("ARIA_VIDEO_API_KEY", "").strip()
+if not ARIA_VIDEO_API_KEY and ARIA_PROVIDER != "1xai":
+    ARIA_VIDEO_API_KEY = ARIA_API_KEY
 VIDEO_TIMEOUT_SECONDS = max(60, min(330, int(os.getenv("ARIA_VIDEO_TIMEOUT_SECONDS", "300"))))
 VIDEO_POLL_SECONDS = max(3, min(15, int(os.getenv("ARIA_VIDEO_POLL_SECONDS", "5"))))
 OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().lower()
@@ -50,6 +57,7 @@ GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.
 DEFAULT_REMOTE_MODEL = {
     # AvalAI's current DeepSeek V4.1 Flash alias. Keep the model override
     # server-side via ARIA_MODEL; never assume a legacy model ID is permanent.
+    "1xai": "deepseek-v4-flash",
     "avalai": "deepseek-flash",
     "doona": "gemini-3.5-flash-lite",
     "1xai": "deepseek-chat",
@@ -60,7 +68,7 @@ MODEL = os.getenv("ARIA_MODEL", "").strip() or (DEFAULT_REMOTE_MODEL if ARIA_API
 ARIA_MEDIA_ENABLED = os.getenv("ARIA_MEDIA_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 ARIA_IMAGE_MODEL = os.getenv(
     "ARIA_IMAGE_MODEL",
-    "muse-image-1.0" if ARIA_PROVIDER == "avalai" else ("gpt-image-2" if ARIA_PROVIDER == "doona" else ""),
+    "muse-image-1.0" if ARIA_PROVIDER == "avalai" else ("gpt-image-2" if ARIA_PROVIDER in {"doona", "1xai"} else ""),
 ).strip()
 ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "veo-3.1-fast-generate-001").strip()
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
@@ -77,6 +85,7 @@ class GuestRequest(BaseModel):
 class ChatRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=12000)
     history: list[dict] = Field(default_factory=list)
+    model: str | None = Field(default=None, max_length=120)
 
 
 class FeedbackRequest(BaseModel):
@@ -277,7 +286,7 @@ def chat_messages(prompt: str, history: list[dict]) -> list[dict]:
     return [system_message(), *safe_history, {"role": "user", "content": prompt}]
 
 
-def hosted_chat_request(messages: list[dict]) -> requests.Response:
+def hosted_chat_request(messages: list[dict], model_override: str | None = None) -> requests.Response:
     """Call the configured OpenAI-compatible provider.
 
     AvalAI documents two domestic API hostnames. If DNS/connection setup for
@@ -304,7 +313,7 @@ def hosted_chat_request(messages: list[dict]) -> requests.Response:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": MODEL,
+                    "model": model_override or MODEL,
                     "messages": messages,
                     "stream": False,
                 },
@@ -318,8 +327,8 @@ def hosted_chat_request(messages: list[dict]) -> requests.Response:
     raise RuntimeError("hosted_ai_unavailable")
 
 
-def ask_hosted_api(messages: list[dict]) -> str:
-    response = hosted_chat_request(messages)
+def ask_hosted_api(messages: list[dict], model_override: str | None = None) -> str:
+    response = hosted_chat_request(messages, model_override)
     response.raise_for_status()
     payload = response.json()
     choices = payload.get("choices") or []
@@ -346,6 +355,24 @@ def hosted_ai_configured() -> bool:
     return bool(ARIA_API_BASE_URL and ARIA_API_KEY)
 
 
+DEFAULT_1XAI_MODELS = [
+    "deepseek-v4-flash",
+    "deepseek-chat",
+    "gemini-2.5-flash-lite",
+    "gpt-5-mini",
+    "claude-haiku-4-5",
+    "qwen3.8-flash",
+    "kimi-k2.6",
+    "glm-5.3-flash",
+    "MiniMax-M3.1-Flash",
+]
+ARIA_ALLOWED_MODELS = [
+    item.strip()
+    for item in os.getenv("ARIA_ALLOWED_MODELS", ",".join(DEFAULT_1XAI_MODELS if ARIA_PROVIDER == "1xai" else [MODEL])).split(",")
+    if item.strip()
+]
+
+
 @app.get("/")
 def home():
     return {
@@ -360,6 +387,19 @@ def home():
         "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or ARIA_VIDEO_API_KEY),
         "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY and ARIA_IMAGE_API_URL and ARIA_IMAGE_MODEL),
         "video_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_VIDEO_API_KEY and ARIA_VIDEO_API_URL and ARIA_VIDEO_MODEL),
+    }
+
+
+@app.get("/models")
+def list_models(x_aria_token: str = Header(default="")):
+    device_id = device_id_from_token(x_aria_token)
+    if device_id is None:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    models = ARIA_ALLOWED_MODELS if hosted_ai_configured() else [MODEL]
+    return {
+        "models": models,
+        "default_model": MODEL,
+        "provider": ARIA_PROVIDER if hosted_ai_configured() else "ollama",
     }
 
 
@@ -730,10 +770,15 @@ def chat(
     if int(global_usage) >= 250:
         raise HTTPException(status_code=429, detail="daily_service_limit")
 
+    requested_model = (request.model or "").strip()
+    if requested_model and requested_model not in ARIA_ALLOWED_MODELS:
+        raise HTTPException(status_code=400, detail="model_not_allowed")
+    selected_model = requested_model or MODEL
+
     messages = chat_messages(request.prompt, request.history)
     try:
         if hosted_ai_configured():
-            answer = ask_hosted_api(messages)
+            answer = ask_hosted_api(messages, selected_model)
         else:
             try:
                 health = requests.get(OLLAMA_URL.replace("/api/chat", "/api/tags"), timeout=3)
@@ -749,6 +794,13 @@ def chat(
             status_code=503,
             detail="cloud_ai_not_configured",
         ) from exc
+    except requests.HTTPError as exc:
+        upstream_status = exc.response.status_code if exc.response is not None else 0
+        if upstream_status == 402 and ARIA_PROVIDER == "1xai":
+            raise HTTPException(status_code=402, detail="provider_wallet_empty") from exc
+        if upstream_status == 428 and ARIA_PROVIDER == "1xai":
+            raise HTTPException(status_code=428, detail="provider_profile_incomplete") from exc
+        raise HTTPException(status_code=503, detail="ai_provider_unavailable_or_invalid_response") from exc
     except (requests.RequestException, KeyError, ValueError) as exc:
         raise HTTPException(
             status_code=503,
@@ -769,7 +821,7 @@ def chat(
 
     return {
         "answer": answer,
-        "model": MODEL,
+        "model": selected_model if hosted_ai_configured() else MODEL,
         "cloud": True,
     }
 
