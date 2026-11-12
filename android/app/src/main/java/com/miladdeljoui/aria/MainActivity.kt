@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AriaTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = androidx.compose.material3.darkColorScheme(
+        colorScheme = androidx.compose.material3.lightColorScheme(
             primary = AriaCyan,
             secondary = AriaCyanDim,
             background = AriaBackground,
