@@ -388,8 +388,10 @@ private fun AriaApp(
                     }
                 updateUi {
                     availableModels = discovered
-                    if (selectedModel.isBlank()) {
-                        selectedModel = catalogue.optString("default_model", activeModel)
+                    val defaultModel = catalogue.optString("default_model", activeModel)
+                    if (selectedModel !in discovered) {
+                        selectedModel = defaultModel
+                        prefs.edit().putString("selected_model", selectedModel).apply()
                     }
                     if (discovered.isEmpty()) status = "مدلی از سرور دریافت نشد."
                 }
