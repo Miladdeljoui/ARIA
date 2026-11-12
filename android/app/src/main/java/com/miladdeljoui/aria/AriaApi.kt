@@ -85,6 +85,12 @@ class AriaApi {
                         "مدل هوش مصنوعی ابری هنوز تنظیم نشده است."
                     "ai_provider_unavailable_or_invalid_response" ->
                         "سرویس هوش مصنوعی پاسخ نداد؛ تنظیمات مدل ابری را بررسی کنید."
+                    "provider_wallet_empty" ->
+                        "اعتبار کیف پول سرویس 1xAi کافی نیست؛ موجودی API را بررسی کن."
+                    "provider_profile_incomplete" ->
+                        "پروفایل احراز هویت 1xAi تکمیل نشده است؛ از پنل خود سرویس تکمیلش کن."
+                    "model_not_allowed" ->
+                        "این مدل برای نسخهٔ فعلی ARIA فعال نشده است."
                     "unauthorized" ->
                         "دسترسی این دستگاه معتبر نیست. یک بار اتصال خودکار را دوباره امتحان کن."
                     "guest_registration_limit" ->
@@ -176,7 +182,8 @@ class AriaApi {
         baseUrl: String,
         token: String,
         prompt: String,
-        history: List<Pair<String, String>> = emptyList()
+        history: List<Pair<String, String>> = emptyList(),
+        selectedModel: String = ""
     ): AriaResponse {
         val historyJson = JSONArray()
         history.takeLast(12).forEach { (role, content) ->
@@ -188,13 +195,15 @@ class AriaApi {
                 )
             }
         }
+        val chatBody = JSONObject()
+            .put("prompt", prompt)
+            .put("history", historyJson)
+        if (selectedModel.isNotBlank()) chatBody.put("model", selectedModel)
         val result = request(
             method = "POST",
             baseUrl = baseUrl,
             path = "/chat",
-            body = JSONObject()
-                .put("prompt", prompt)
-                .put("history", historyJson),
+            body = chatBody,
             token = token
         )
 
@@ -242,6 +251,15 @@ class AriaApi {
             method = "GET",
             baseUrl = baseUrl,
             path = "/status"
+        )
+    }
+
+    fun models(baseUrl: String, token: String): JSONObject {
+        return request(
+            method = "GET",
+            baseUrl = baseUrl,
+            path = "/models",
+            token = token
         )
     }
 
