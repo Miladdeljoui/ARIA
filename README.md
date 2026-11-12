@@ -102,7 +102,7 @@ See [docs/paperclip-integration-fa.md](docs/paperclip-integration-fa.md) for the
 
 ## Iran-compatible cloud deployment
 
-For the current AvalAI-backed cloud configuration and deployment on Weblines Cloud in Iran, see [docs/deploy-weblines-iran.md](docs/deploy-weblines-iran.md). Keep provider keys in hosting secrets, not in the APK or repository. The backend now defaults to DeepSeek V4 Flash through AvalAI, with documented domestic API host fallback. Image/video generation remains disabled until the owner funds the account and intentionally enables it.
+The current default cloud-provider integration is 1xAi, an OpenAI-compatible Iranian API gateway. It supports one server-side key for a curated choice of models from GPT, Claude, Gemini, DeepSeek, Grok, Kimi, GLM, Qwen, MiniMax and Hunyuan. See [docs/1xai-integration-fa.md](docs/1xai-integration-fa.md) for account setup, key handling, the Weblines deployment configuration, model allowlist, image generation, separate video-provider requirements and paid-launch gates. Keep all API keys in hosting secrets, never in the APK or repository. The app includes a model picker; a real API key and successful server deployment are still required.
 
 ## Latest milestone
 
@@ -112,7 +112,7 @@ The next phase is the safe tool registry and owner approval workflow.
 
 ## UI and voice milestone
 
-The Android client and laptop web dashboard now share the ARIA visual language: animated central eye, live connectivity state, chat panel, Persian speech input and Persian text-to-speech output.
+The Android client now has a warm, Claude-inspired light chat layout, Persian speech input and Persian text-to-speech output. The latest beta also includes a server-backed model picker for the configured allowlist.
 
 Voice recognition is implemented as press-to-talk rather than an always-listening loop. Android's SpeechRecognizer documentation notes that the platform recognizer may stream audio to remote services and is not intended for continuous recognition, so continuous listening will be added only with an explicit local/permission-aware design.
 
