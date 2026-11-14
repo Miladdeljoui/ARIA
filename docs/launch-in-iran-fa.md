@@ -69,13 +69,14 @@ nano .env
 ```
 
 در فایل `.env`:
+- `ARIA_DOMAIN`: دامنهٔ API که به IP سرور اشاره می‌کند، بدون پروتکل؛ مثلاً `api.your-domain.ir`.
 - `ARIA_API_KEY`: کلید خصوصی 1xAi.
 - `ARIA_VIDEO_API_KEY`: کلید خصوصی AvalAI برای ویدئو.
 - `ARIA_PUBLIC_BASE_URL`: نشانی HTTPS واقعی، مثلاً `https://api.your-domain.ir`.
 - `ARIA_MEDIA_ENABLED=false`: فعلاً خاموش بماند.
 - `ZARINPAL_SANDBOX=true`: تا زمان تست درگاه واقعی روشن بماند.
 
-در فایل `cloud/Caddyfile` دامنهٔ واقعی را جایگزین مقدار نمونه کن. سپس:
+در فایل `cloud/Caddyfile` مقدار `{$ARIA_DOMAIN}` از همین متغیر خوانده می‌شود؛ مقدار دامنه را در `.env` تنظیم کن. سپس:
 ```bash
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
