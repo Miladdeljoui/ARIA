@@ -1,3 +1,5 @@
+> **پروفایل پیش‌فرض نسخهٔ فعلی ARIA:** چت و تصویر با 1xAi، فهرست زندهٔ مدل‌ها از `/v1/models` و ویدئو با کلید جداگانهٔ AvalAI انجام می‌شود. بخش‌های قدیمی‌تر این فایل دربارهٔ استفاده از AvalAI برای چت را به‌عنوان گزینهٔ جایگزین بخوان، نه تنظیم پیش‌فرض. راهنمای کامل نصب و درآمدزایی: [راهنمای راه‌اندازی در ایران](../docs/launch-in-iran-fa.md).
+
 # ARIA Cloud
 
 ARIA's FastAPI gateway keeps model-provider credentials on the server. The Android APK never receives API secrets. The Android guest flow uses `POST /guest` and does not require a six-digit pairing code.
