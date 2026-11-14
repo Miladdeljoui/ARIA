@@ -472,6 +472,27 @@ def status():
     except requests.RequestException:
         pass
 
+    # For the default 1xAi gateway, verify that its authenticated model catalogue
+    # is actually reachable. A non-empty environment variable alone is not health.
+    provider_ok = False
+    if hosted_ai_configured():
+        if ARIA_PROVIDER == "1xai":
+            models_url = ARIA_API_BASE_URL.replace("/chat/completions", "/models")
+            try:
+                provider_response = requests.get(
+                    models_url,
+                    headers={"Authorization": f"Bearer {ARIA_API_KEY}"},
+                    timeout=(3, 5),
+                )
+                provider_response.raise_for_status()
+                provider_data = provider_response.json().get("data") or []
+                provider_ok = isinstance(provider_data, list) and bool(provider_data)
+            except (requests.RequestException, ValueError, AttributeError):
+                provider_ok = False
+        else:
+            provider_ok = True
+
+    chat_ready = provider_ok if hosted_ai_configured() else ollama_ok
     return {
         "assistant": "ARIA",
         "owner": OWNER_NAME,
@@ -479,14 +500,15 @@ def status():
         "cloud": True,
         "ollama": ollama_ok,
         "cloud_ai_configured": hosted_ai_configured(),
-        "api_provider": ARIA_PROVIDER if hosted_ai_configured() else "none",
+        "provider_connected": provider_ok,
+        "api_provider": ARIA_PROVIDER if provider_ok else "not_ready",
         "api_model": MODEL,
         "anonymous_guest_access": True,
         "media_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY or ARIA_VIDEO_API_KEY),
         "image_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_IMAGE_API_KEY and ARIA_IMAGE_API_URL and ARIA_IMAGE_MODEL),
         "video_enabled": ARIA_MEDIA_ENABLED and bool(ARIA_VIDEO_API_KEY and ARIA_VIDEO_API_URL and ARIA_VIDEO_MODEL),
-        "ai_provider": ARIA_PROVIDER if hosted_ai_configured() else ("ollama" if ollama_ok else "not_configured"),
-        "chat_ready": hosted_ai_configured() or ollama_ok,
+        "ai_provider": ARIA_PROVIDER if provider_ok else ("ollama" if chat_ready else "not_configured"),
+        "chat_ready": chat_ready,
         "image_model": ARIA_IMAGE_MODEL,
         "video_model": ARIA_VIDEO_MODEL,
         "server_time": int(time.time()),
