@@ -244,6 +244,8 @@ private fun AriaApp(
                 }
             } catch (error: Exception) {
                 updateUi {
+                    imageEnabled = false
+                    videoEnabled = false
                     onlineMode = "STANDBY"
                     status = "سرور ARIA پاسخ نداد؛ آدرس HTTPS، DNS و وضعیت VPS را بررسی کن."
                 }
@@ -362,7 +364,12 @@ private fun AriaApp(
                     }
                 }
             } catch (error: Exception) {
-                updateUi { onlineMode = "STANDBY"; status = "اتصال ناموفق: " + friendlyError(error) }
+                updateUi {
+                    imageEnabled = false
+                    videoEnabled = false
+                    onlineMode = "STANDBY"
+                    status = "اتصال ناموفق: " + friendlyError(error)
+                }
             }
         }
     }
