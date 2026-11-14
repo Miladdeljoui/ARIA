@@ -144,3 +144,8 @@ Set `ARIA_DOMAIN` to your real subdomain. Enter the real API keys in `.env` on t
 - ARIA currently limits guests to 10 chat requests per rolling 24 hours and the deployment to 45 per rolling 24 hours.
 - Subscriptions and payments remain beta placeholders. Do not collect money until account identity, payment verification, entitlement, data backups, privacy and refunds have been implemented and tested.
 - Prompts are sent from ARIA's server to the configured provider. Do not send passwords, card details, or other sensitive data.
+
+
+## ARIA current Iran launch profile
+
+For the production profile, see [../docs/launch-in-iran-fa.md](../docs/launch-in-iran-fa.md). The Android client now removes the local guest-name/phone/PIN gate, rejects the stale Weblines URL, and stores each guest token alongside its server URL. The model picker can refresh the live 1xAi `/v1/models` catalogue. AvalAI video creation uses its documented JSON request body. API keys are server-side secrets only. Media remains disabled until provider credentials and spending limits are tested.
