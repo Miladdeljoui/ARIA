@@ -68,6 +68,9 @@ ARIA_IMAGE_MODEL = os.getenv(
     "ARIA_IMAGE_MODEL",
     "muse-image-1.0" if ARIA_PROVIDER == "avalai" else ("gpt-image-2" if ARIA_PROVIDER in {"doona", "1xai"} else ""),
 ).strip()
+ARIA_IMAGE_QUALITY = os.getenv("ARIA_IMAGE_QUALITY", "low").strip().lower()
+if ARIA_IMAGE_QUALITY not in {"low", "medium", "high"}:
+    ARIA_IMAGE_QUALITY = "low"
 ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "veo-3.1-fast-generate-001").strip()
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
@@ -970,7 +973,7 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
                 "model": ARIA_IMAGE_MODEL,
                 "prompt": payload.prompt.strip(),
                 "size": "1024x1024",
-                "quality": "medium",
+                "quality": ARIA_IMAGE_QUALITY,
                 "n": 1,
             },
             timeout=180,
