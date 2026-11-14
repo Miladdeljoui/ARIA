@@ -415,7 +415,31 @@ def list_models(x_aria_token: str = Header(default="")):
     device_id = device_id_from_token(x_aria_token)
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
+
     models = ARIA_ALLOWED_MODELS if hosted_ai_configured() else [MODEL]
+    # 1xAi publishes its live merged catalogue at the compatible /v1/models route.
+    # Fetch it server-side so retired/new model IDs do not break the Android picker.
+    if hosted_ai_configured() and ARIA_PROVIDER == "1xai":
+        models_url = ARIA_API_BASE_URL.replace("/chat/completions", "/models")
+        try:
+            catalogue = requests.get(
+                models_url,
+                headers={"Authorization": f"Bearer {ARIA_API_KEY}"},
+                timeout=(8, 20),
+            )
+            catalogue.raise_for_status()
+            entries = catalogue.json().get("data") or []
+            live_ids = [
+                str(item.get("id", "")).strip()
+                for item in entries
+                if isinstance(item, dict) and str(item.get("id", "")).strip()
+            ]
+            if live_ids:
+                models = live_ids
+        except (requests.RequestException, ValueError, AttributeError):
+            logger.warning("Unable to refresh 1xAi model catalogue; serving cached allowlist")
+    if MODEL not in models:
+        models.insert(0, MODEL)
     return {
         "models": models,
         "default_model": MODEL,
@@ -960,12 +984,12 @@ def generate_video(payload: VideoRequest, x_aria_token: str = Header(default="")
         create_response = requests.post(
             ARIA_VIDEO_API_URL,
             headers=headers,
-            # AvalAI's Videos API expects multipart/form-data, not JSON.
-            files={
-                "model": (None, ARIA_VIDEO_MODEL),
-                "prompt": (None, payload.prompt.strip()),
-                "size": (None, size),
-                "seconds": (None, str(payload.duration)),
+            # AvalAI's documented create-video endpoint accepts JSON.
+            json={
+                "model": ARIA_VIDEO_MODEL,
+                "prompt": payload.prompt.strip()[:1000],
+                "size": size,
+                "seconds": str(payload.duration),
             },
             timeout=60,
         )
