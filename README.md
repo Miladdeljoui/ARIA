@@ -125,3 +125,7 @@ The planned public release, free-trial/subscription tiers, verified payment hand
 ## VPN, creative studio, and updates roadmap
 
 The proposed separate VPN menu, official Shir o Khorshid/MahsaNG links, image/video generation, owner-free access, and app update notices are documented in [docs/vpn-creative-updates-roadmap.md](docs/vpn-creative-updates-roadmap.md). These are roadmap items; direct VPN tunneling, creative generation, owner subscriptions, and push updates are not claimed as implemented.
+
+## Iran launch checklist
+
+See [docs/launch-in-iran-fa.md](docs/launch-in-iran-fa.md) for the current 1xAi chat/image + AvalAI video architecture, VPS checklist, secrets, deployment, health checks and revenue safeguards.
