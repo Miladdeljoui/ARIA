@@ -987,9 +987,9 @@ def generate_video(payload: VideoRequest, x_aria_token: str = Header(default="")
     if payload.duration not in (4, 8):
         raise HTTPException(status_code=422, detail="video_duration_must_be_4_or_8_seconds")
 
-    # Do not set Content-Type manually: requests adds the multipart boundary.
     headers = {
         "Authorization": f"Bearer {ARIA_VIDEO_API_KEY}",
+        "Content-Type": "application/json",
     }
     size = {
         "16:9": "1280x720",
