@@ -56,7 +56,7 @@ ARIA_PUBLIC_BASE_URL = os.getenv("ARIA_PUBLIC_BASE_URL", "").strip().rstrip("/")
 GITHUB_RELEASES_URL = os.getenv("ARIA_GITHUB_RELEASES_URL", "https://api.github.com/repos/Miladdeljoui/ARIA/releases/latest")
 DEFAULT_REMOTE_MODEL = {
     # 1xAi model IDs are selected server-side; ARIA_MODEL can override this default.
-    "1xai": "deepseek-v4-flash",
+    "1xai": "gpt-5-nano",
     "avalai": "deepseek-flash",
     "doona": "gemini-3.5-flash-lite",
     "heroai": "deepseek/deepseek-chat",
@@ -372,15 +372,18 @@ def hosted_ai_configured() -> bool:
 
 
 DEFAULT_1XAI_MODELS = [
-    "deepseek-v4-flash",
-    "deepseek-chat",
+    "gpt-5-nano",
     "gemini-2.5-flash-lite",
+    "deepseek-chat",
+    "deepseek-v4-flash",
     "gpt-5-mini",
+    "gpt-4o-mini",
     "claude-haiku-4-5",
+    "claude-sonnet-4-6",
     "qwen3.8-flash",
     "kimi-k2.6",
     "glm-5.3-flash",
-    "MiniMax-M3.1-Flash",
+    "MiniMax-M2.7",
 ]
 # An empty ARIA_ALLOWED_MODELS means: use the provider's live catalogue.
 # A non-empty value is an explicit administrator allowlist.
