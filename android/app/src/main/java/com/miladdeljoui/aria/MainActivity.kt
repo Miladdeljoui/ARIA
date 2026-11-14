@@ -70,7 +70,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import java.util.Locale
@@ -137,103 +136,12 @@ private fun AriaRoot(
     voiceStatus: androidx.compose.runtime.MutableState<String>,
     requestMicPermission: () -> Unit
 ) {
-    val context = LocalContext.current
-    val prefs = remember {
-        context.getSharedPreferences("aria_profile", Context.MODE_PRIVATE)
-    }
-    var signedIn by remember { mutableStateOf(prefs.getBoolean("guest_ready", true)) }
-
-    if (!signedIn) {
-        GuestSignInScreen(
-            initialName = prefs.getString("name", "") ?: "",
-            initialPhone = prefs.getString("phone", "") ?: "",
-            onContinue = { name, phone ->
-                prefs.edit()
-                    .putString("name", name.trim())
-                    .putString("phone", phone.trim())
-                    .putBoolean("guest_ready", true)
-                    .apply()
-                signedIn = true
-            }
-        )
-    } else {
-        AriaApp(
-            voiceStatus = voiceStatus.value,
-            requestMicPermission = requestMicPermission,
-            onVoiceState = { voiceStatus.value = it }
-        )
-    }
-}
-
-@Composable
-private fun GuestSignInScreen(
-    initialName: String,
-    initialPhone: String,
-    onContinue: (String, String) -> Unit
-) {
-    var name by remember { mutableStateOf(initialName) }
-    var phone by remember { mutableStateOf(initialPhone) }
-    var error by remember { mutableStateOf("") }
-
-    Box(
-        modifier = Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xFFF7F6F2), Color(0xFFF0EDE7)))
-        ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Text("ARIA", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-            Text("دستیار هوشمند شخصی تو", color = Color(0xFF77716A))
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { error = "ورود گوگل هنوز به سرویس OAuth متصل نشده است." },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("G  ورود با حساب گوگل")
-            }
-            Text("یا ورود مهمان رایگان", color = Color(0xFFB76A4D))
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it; error = "" },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("نام") },
-                singleLine = true
-            )
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it; error = "" },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("شماره تلفن") },
-                singleLine = true
-            )
-            if (error.isNotBlank()) {
-                Text(error, color = Color(0xFFB42318))
-            }
-            Button(
-                onClick = {
-                    if (name.trim().isBlank()) {
-                        error = "نامت را وارد کن."
-                    } else if (phone.trim().filter { it.isDigit() }.length < 7) {
-                        error = "شماره تلفن را بررسی کن."
-                    } else {
-                        onContinue(name, phone)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("ادامه به‌صورت مهمان")
-            }
-            Text(
-                "نام و شماره فعلاً فقط روی همین گوشی ذخیره می‌شوند؛ پیامک تأیید ارسال نمی‌شود.",
-                color = Color(0xFF77716A),
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
+    // ورود مهمان و قفل محلی حذف شده‌اند. سرور برای هر نصب، توکن تصادفی صادر می‌کند.
+    AriaApp(
+        voiceStatus = voiceStatus.value,
+        requestMicPermission = requestMicPermission,
+        onVoiceState = { voiceStatus.value = it }
+    )
 }
 
 @Composable
@@ -251,8 +159,9 @@ private fun AriaApp(
     val mediaExecutor = remember { Executors.newSingleThreadExecutor() }
     val api = remember { AriaApi() }
 
+    val savedCloudUrl = prefs.getString("cloud_url", "") ?: ""
     var cloudUrl by remember {
-        mutableStateOf(prefs.getString("cloud_url", "https://aria-2.weblines.ir") ?: "https://aria-2.weblines.ir")
+        mutableStateOf(savedCloudUrl.takeUnless { it.contains("aria-2.weblines.ir", ignoreCase = true) } ?: "")
     }
     var localUrl by remember {
         mutableStateOf(
@@ -300,8 +209,12 @@ private fun AriaApp(
     }
 
     LaunchedEffect(Unit) {
-        status = "در حال بررسی اتصال ARIA…"
-        executor.execute {
+        if (!cloudUrl.startsWith("https://", ignoreCase = true)) {
+            onlineMode = "SETUP"
+            status = "برای اتصال چت، آدرس HTTPS سرور ARIA را در تنظیمات وارد کن. سرور قدیمی قابل اتکا نیست."
+        } else {
+            status = "در حال بررسی اتصال ARIA…"
+            executor.execute {
             try {
                 val server = api.status(cloudUrl.trimEnd('/'))
                 val configured = server.optBoolean("cloud_ai_configured", false)
@@ -330,6 +243,7 @@ private fun AriaApp(
                 }
             }
         }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -356,17 +270,22 @@ private fun AriaApp(
     }
 
     fun guestToken(forceRegister: Boolean = false): String {
+        val normalizedUrl = cloudUrl.trim().trimEnd('/')
+        if (!normalizedUrl.startsWith("https://", ignoreCase = true)) {
+            throw IllegalStateException("ابتدا آدرس HTTPS سرور ARIA را در تنظیمات وارد کن.")
+        }
         val saved = prefs.getString("cloud_token", "") ?: ""
-        if (!forceRegister && saved.isNotBlank()) return saved
+        val savedServer = prefs.getString("cloud_token_server_url", "") ?: ""
+        if (!forceRegister && saved.isNotBlank() && savedServer == normalizedUrl) return saved
         val installId = prefs.getString("guest_install_id", null)
             ?: UUID.randomUUID().toString().also {
                 prefs.edit().putString("guest_install_id", it).apply()
             }
-        if (cloudUrl.isBlank()) throw IllegalStateException("آدرس سرور خالی است.")
-        val token = api.guest(cloudUrl.trimEnd('/'), installId, "ARIA Android")
+        val token = api.guest(normalizedUrl, installId, "ARIA Android")
         prefs.edit()
-            .putString("cloud_url", cloudUrl.trimEnd('/'))
+            .putString("cloud_url", normalizedUrl)
             .putString("cloud_token", token)
+            .putString("cloud_token_server_url", normalizedUrl)
             .apply()
         updateUi {
             cloudToken = token
@@ -405,6 +324,12 @@ private fun AriaApp(
     }
 
     fun reconnectCloud() {
+        val normalizedUrl = cloudUrl.trim().trimEnd('/')
+        if (!normalizedUrl.startsWith("https://", ignoreCase = true)) {
+            onlineMode = "SETUP"
+            status = "آدرس معتبر HTTPS وارد کن."
+            return
+        }
         status = "در حال اتصال خودکار به سرور ARIA…"
         executor.execute {
             try {
@@ -488,12 +413,13 @@ private fun AriaApp(
 
                 try {
                     var token = guestToken()
+                    val modelToUse = selectedModel.takeIf { it.isNotBlank() && it in availableModels } ?: ""
                     try {
-                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history, selectedModel)
+                        response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history, modelToUse)
                     } catch (firstError: Exception) {
                         if (firstError is AriaApi.AriaException && firstError.errorCode == "unauthorized") {
                             token = guestToken(forceRegister = true)
-                            response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history)
+                            response = api.chat(cloudUrl.trimEnd('/'), token, prompt, history, modelToUse)
                         } else {
                             throw firstError
                         }
@@ -767,7 +693,7 @@ private fun AriaApp(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("بازکردن آزمایشگاه Molab") }
-                    Text("اتصال مهمان به‌صورت خودکار انجام می‌شود و کد شش‌رقمی ندارد. پیام‌ها از سرور ARIA و کلید خصوصی مدیر به سرویس مدل فرستاده می‌شوند.", color = AriaMuted)
+                    Text("ورود و کد شش‌رقمی حذف شده است. اپ برای هر نصب، توکن مهمان امن می‌گیرد؛ کلید سرویس مدل فقط روی سرور می‌ماند.", color = AriaMuted)
                     OutlinedTextField(
                         value = cloudUrl,
                         onValueChange = { cloudUrl = it.trim() },
@@ -777,8 +703,19 @@ private fun AriaApp(
                     )
                     Button(
                         onClick = {
-                            prefs.edit().putString("cloud_url", cloudUrl.trimEnd('/')).apply()
-                            reconnectCloud()
+                            val normalizedUrl = cloudUrl.trim().trimEnd('/')
+                            if (!normalizedUrl.startsWith("https://", ignoreCase = true)) {
+                                status = "آدرس باید با https:// شروع شود."
+                            } else {
+                                val previousServer = prefs.getString("cloud_token_server_url", "") ?: ""
+                                if (previousServer != normalizedUrl) {
+                                    prefs.edit().remove("cloud_token").remove("cloud_token_server_url").apply()
+                                    cloudToken = ""
+                                }
+                                cloudUrl = normalizedUrl
+                                prefs.edit().putString("cloud_url", normalizedUrl).apply()
+                                reconnectCloud()
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("اتصال مجدد به سرور") }
