@@ -382,15 +382,20 @@ DEFAULT_1XAI_MODELS = [
     "glm-5.3-flash",
     "MiniMax-M3.1-Flash",
 ]
+# An empty ARIA_ALLOWED_MODELS means: use the provider's live catalogue.
+# A non-empty value is an explicit administrator allowlist.
+ARIA_MODELS_UNRESTRICTED = not os.getenv("ARIA_ALLOWED_MODELS", "").strip()
 ARIA_ALLOWED_MODELS = [
     item.strip()
-    for item in os.getenv("ARIA_ALLOWED_MODELS", ",".join(DEFAULT_1XAI_MODELS if ARIA_PROVIDER == "1xai" else [MODEL])).split(",")
+    for item in os.getenv(
+        "ARIA_ALLOWED_MODELS",
+        ",".join(DEFAULT_1XAI_MODELS if ARIA_PROVIDER == "1xai" else [MODEL]),
+    ).split(",")
     if item.strip()
 ]
 if MODEL not in ARIA_ALLOWED_MODELS:
     ARIA_ALLOWED_MODELS.insert(0, MODEL)
-if MODEL not in ARIA_ALLOWED_MODELS:
-    ARIA_ALLOWED_MODELS.insert(0, MODEL)
+LIVE_MODEL_CATALOGUE: list[str] = []
 
 
 @app.get("/")
@@ -412,6 +417,7 @@ def home():
 
 @app.get("/models")
 def list_models(x_aria_token: str = Header(default="")):
+    global LIVE_MODEL_CATALOGUE
     device_id = device_id_from_token(x_aria_token)
     if device_id is None:
         raise HTTPException(status_code=401, detail="unauthorized")
@@ -435,7 +441,14 @@ def list_models(x_aria_token: str = Header(default="")):
                 if isinstance(item, dict) and str(item.get("id", "")).strip()
             ]
             if live_ids:
-                models = live_ids
+                LIVE_MODEL_CATALOGUE = live_ids
+                models = (
+                    live_ids
+                    if ARIA_MODELS_UNRESTRICTED
+                    else [model_id for model_id in live_ids if model_id in ARIA_ALLOWED_MODELS]
+                )
+                if not models:
+                    models = ARIA_ALLOWED_MODELS
         except (requests.RequestException, ValueError, AttributeError):
             logger.warning("Unable to refresh 1xAi model catalogue; serving cached allowlist")
     if MODEL not in models:
@@ -816,7 +829,10 @@ def chat(
 
     requested_model = (request.model or "").strip()
     if hosted_ai_configured():
-        if requested_model and requested_model not in ARIA_ALLOWED_MODELS:
+        allowed_models = set(ARIA_ALLOWED_MODELS)
+        if ARIA_PROVIDER == "1xai" and ARIA_MODELS_UNRESTRICTED:
+            allowed_models.update(LIVE_MODEL_CATALOGUE)
+        if requested_model and requested_model not in allowed_models:
             raise HTTPException(status_code=400, detail="model_not_allowed")
         selected_model = requested_model or MODEL
     else:
