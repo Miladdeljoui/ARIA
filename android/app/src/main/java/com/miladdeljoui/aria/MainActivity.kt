@@ -239,7 +239,7 @@ private fun AriaApp(
             } catch (error: Exception) {
                 updateUi {
                     onlineMode = "STANDBY"
-                    status = "سرور ARIA پاسخ نداد؛ هنگام ارسال مسیر رایگان جایگزین را هم امتحان می‌کنیم."
+                    status = "سرور ARIA پاسخ نداد؛ آدرس HTTPS، DNS و وضعیت VPS را بررسی کن."
                 }
             }
         }
@@ -493,7 +493,7 @@ private fun AriaApp(
                     Box(
                         modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFEDE9E3)).padding(horizontal = 10.dp, vertical = 7.dp)
                     ) {
-                        Text(onlineMode, color = Color(0xFFB96C4B), style = MaterialTheme.typography.labelSmall)
+                        Text(when (onlineMode) { "SETUP" -> "نیاز به سرور"; "STANDBY" -> "آفلاین"; "NO AI" -> "بدون مدل"; else -> onlineMode }, color = Color(0xFFB96C4B), style = MaterialTheme.typography.labelSmall)
                     }
                     OutlinedButton(onClick = { messages.clear(); composerMode = "chat"; message = "" }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)) { Text("＋") }
                     OutlinedButton(onClick = { showSettings = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp)) { Text("تنظیمات") }
@@ -537,10 +537,12 @@ private fun AriaApp(
             ) {
                 Text(
                     when (onlineMode) {
+                        "SETUP" -> "سرور ابری تنظیم نشده"
                         "STANDBY" -> "در انتظار اتصال"
+                        "NO AI" -> "سرور وصل است، اما مدل آماده نیست"
                         else -> "اتصال برقرار است"
                     },
-                    color = if (onlineMode == "STANDBY") Color(0xFFB96C4B) else Color(0xFF59755B),
+                    color = if (onlineMode in listOf("SETUP", "STANDBY", "NO AI")) Color(0xFFB96C4B) else Color(0xFF59755B),
                     fontWeight = FontWeight.Medium
                 )
                 Text(status, color = AriaMuted, style = MaterialTheme.typography.bodySmall)
