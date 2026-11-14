@@ -183,6 +183,8 @@ private fun AriaApp(
     var selectedModel by remember { mutableStateOf(prefs.getString("selected_model", "") ?: "") }
     var availableModels by remember { mutableStateOf(listOf<String>()) }
     var showModelPicker by remember { mutableStateOf(false) }
+    var imageEnabled by remember { mutableStateOf(false) }
+    var videoEnabled by remember { mutableStateOf(false) }
     val messages = remember { mutableStateListOf<ChatItem>() }
 
     val tts = remember {
@@ -227,7 +229,11 @@ private fun AriaApp(
                     server.optString("api_provider", "cloud")
                 ).uppercase(Locale.ROOT)
                 val model = server.optString("api_model", server.optString("model", ""))
+                val imageReady = server.optBoolean("image_enabled", false)
+                val videoReady = server.optBoolean("video_enabled", false)
                 updateUi {
+                    imageEnabled = imageReady
+                    videoEnabled = videoReady
                     activeModel = model.ifBlank { if (chatReady) provider else "بدون مدل فعال" }
                     onlineMode = if (chatReady) provider else "NO AI"
                     status = when {
@@ -341,7 +347,11 @@ private fun AriaApp(
                 )
                 val provider = server.optString("ai_provider", server.optString("api_provider", "cloud"))
                 val model = server.optString("api_model", server.optString("model", ""))
+                val imageReady = server.optBoolean("image_enabled", false)
+                val videoReady = server.optBoolean("video_enabled", false)
                 updateUi {
+                    imageEnabled = imageReady
+                    videoEnabled = videoReady
                     cloudToken = token
                     activeModel = model.ifBlank { if (aiReady) provider else "بدون مدل فعال" }
                     onlineMode = if (aiReady) provider.uppercase(Locale.ROOT) else "NO AI"
@@ -367,6 +377,13 @@ private fun AriaApp(
         composerMode = "chat"
 
         if (mode == "image") {
+            if (!imageEnabled) {
+                updateUi {
+                    messages.add(ChatItem(false, "ساخت تصویر هنوز روی سرور فعال نشده است. مدیر باید کلید API تصویر و سهمیهٔ هزینه را تنظیم کند."))
+                    status = "ساخت تصویر در انتظار راه‌اندازی سرور است."
+                }
+                return
+            }
             updateUi { status = "در حال ساخت تصویر از طریق سرور امن ARIA؛ ممکن است هزینهٔ سرویس‌دهنده اعمال شود." }
             mediaExecutor.execute {
                 try {
@@ -386,6 +403,13 @@ private fun AriaApp(
         }
 
         if (mode == "video") {
+            if (!videoEnabled) {
+                updateUi {
+                    messages.add(ChatItem(false, "ساخت کلیپ هنوز روی سرور فعال نشده است. مدیر باید کلید ویدئو، بودجه و محدودیت هزینه را تنظیم کند."))
+                    status = "ساخت کلیپ در انتظار راه‌اندازی سرور است."
+                }
+                return
+            }
             updateUi { status = "در حال ساخت کلیپ از طریق سرور؛ ممکن است چند دقیقه و اعتبار سرویس لازم باشد." }
             mediaExecutor.execute {
                 try {
@@ -623,11 +647,19 @@ private fun AriaApp(
                 OutlinedButton(onClick = { composerMode = "chat" }, modifier = Modifier.weight(1f)) {
                     Text(if (composerMode == "chat") "✓ چت" else "چت")
                 }
-                OutlinedButton(onClick = { composerMode = "image"; status = "ساخت تصویر: ممکن است اعتبار پولی لازم باشد." }, modifier = Modifier.weight(1f)) {
-                    Text(if (composerMode == "image") "✓ تصویر" else "تصویر")
+                OutlinedButton(
+                    onClick = { composerMode = "image"; status = "ساخت تصویر: هزینهٔ هر تصویر از اعتبار API کم می‌شود." },
+                    modifier = Modifier.weight(1f),
+                    enabled = imageEnabled
+                ) {
+                    Text(if (composerMode == "image") "✓ تصویر" else if (imageEnabled) "تصویر" else "تصویر · خاموش")
                 }
-                OutlinedButton(onClick = { composerMode = "video"; status = "ساخت کلیپ: معمولاً پولی است و ممکن است چند دقیقه زمان ببرد." }, modifier = Modifier.weight(1f)) {
-                    Text(if (composerMode == "video") "✓ کلیپ" else "کلیپ")
+                OutlinedButton(
+                    onClick = { composerMode = "video"; status = "ساخت کلیپ: هزینهٔ هر ثانیه جداگانه محاسبه می‌شود." },
+                    modifier = Modifier.weight(1f),
+                    enabled = videoEnabled
+                ) {
+                    Text(if (composerMode == "video") "✓ کلیپ" else if (videoEnabled) "کلیپ" else "کلیپ · خاموش")
                 }
             }
 
