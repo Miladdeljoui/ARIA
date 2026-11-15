@@ -1,3 +1,5 @@
+# Render is a demo/test deployment only: its free filesystem is temporary.
+# Use Weblines (or another host with persistent storage) for a paid public launch.
 services:
   - type: web
     name: aria-cloud
@@ -9,21 +11,23 @@ services:
     healthCheckPath: /status
     envVars:
       - key: ARIA_PROVIDER
-        value: avalai
+        value: netarz
       - key: ARIA_API_BASE_URL
-        value: https://api.avalai.ir/v1/chat/completions
+        value: https://netarz.ir/api/ai/v1/chat/completions
       - key: ARIA_API_KEY
         sync: false
       - key: ARIA_MODEL
         value: deepseek-flash
+      - key: ARIA_MAX_OUTPUT_TOKENS
+        value: "1200"
       - key: ARIA_IMAGE_API_URL
-        value: https://api.avalai.ir/v1/images/generations
+        value: https://netarz.ir/api/ai/v1/images/generations
       - key: ARIA_IMAGE_MODEL
-        value: muse-image-1.0
+        value: gemini-3.1-flash-lite-image
       - key: ARIA_VIDEO_API_URL
-        value: https://api.avalai.ir/v1/videos
+        value: https://netarz.ir/api/ai/v1/videos
       - key: ARIA_VIDEO_MODEL
-        value: veo-3.1-fast-generate-001
+        value: veo-3.1-fast
       - key: ARIA_MEDIA_ENABLED
         value: "false"
       - key: ARIA_DB
@@ -31,7 +35,7 @@ services:
       - key: ARIA_OWNER_NAME
         value: Milad
       - key: ARIA_PUBLIC_BASE_URL
-        value: https://aria-2.weblines.ir
+        sync: false
       - key: ZARINPAL_SANDBOX
         value: "true"
       - key: ZARINPAL_MERCHANT_ID
