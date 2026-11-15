@@ -503,7 +503,8 @@ def status():
                 )
                 me_response.raise_for_status()
                 account = me_response.json()
-                if account.get("status") == "active":
+                account_balance = float((account.get("balance") or {}).get("usd", 0) or 0)
+                if account.get("status") == "active" and account_balance > 0:
                     provider_response = requests.get(models_url, timeout=(3, 5))
                     provider_response.raise_for_status()
                     provider_data = provider_response.json().get("data") or []
