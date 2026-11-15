@@ -26,6 +26,8 @@ DEFAULT_CHAT_URLS = {
     "doona": "https://platform.doona.ai/v1/chat/completions",
     "heroai": "https://iranapi.heroai.ir/ai/chat/completions",
     "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+    # Iranian domestic endpoint; same OpenAI-compatible API and key as NetArz.
+    "netarz": "https://ir.gisoo.pro/api/v1/chat/completions",
 }
 ARIA_API_BASE_URL = os.getenv("ARIA_API_BASE_URL", DEFAULT_CHAT_URLS.get(ARIA_PROVIDER, "")).strip()
 ARIA_API_KEY = os.getenv("ARIA_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEY", "").strip()
@@ -33,12 +35,13 @@ DEFAULT_IMAGE_URLS = {
     "1xai": "https://1xai.ir/v1/images/generations",
     "avalai": "https://api.avalai.ir/v1/images/generations",
     "doona": "https://platform.doona.ai/v1/images/generations",
+    "netarz": "https://ir.gisoo.pro/api/v1/images/generations",
 }
 ARIA_IMAGE_API_URL = os.getenv("ARIA_IMAGE_API_URL", DEFAULT_IMAGE_URLS.get(ARIA_PROVIDER, "")).strip()
 ARIA_IMAGE_API_KEY = os.getenv("ARIA_IMAGE_API_KEY", "").strip() or ARIA_API_KEY
 ARIA_VIDEO_API_URL = os.getenv(
     "ARIA_VIDEO_API_URL",
-    "https://api.avalai.ir/v1/videos" if ARIA_PROVIDER == "avalai" else "",
+    "https://api.avalai.ir/v1/videos" if ARIA_PROVIDER == "avalai" else ("https://ir.gisoo.pro/api/v1/videos" if ARIA_PROVIDER == "netarz" else ""),
 ).strip()
 ARIA_VIDEO_API_KEY = os.getenv("ARIA_VIDEO_API_KEY", "").strip()
 if not ARIA_VIDEO_API_KEY and ARIA_PROVIDER != "1xai":
@@ -61,17 +64,18 @@ DEFAULT_REMOTE_MODEL = {
     "doona": "gemini-3.5-flash-lite",
     "heroai": "deepseek/deepseek-chat",
     "openrouter": "openrouter/free",
+    "netarz": "deepseek-flash",
 }.get(ARIA_PROVIDER, "qwen3:1.7b")
 MODEL = os.getenv("ARIA_MODEL", "").strip() or (DEFAULT_REMOTE_MODEL if ARIA_API_KEY else "qwen3:1.7b")
 ARIA_MEDIA_ENABLED = os.getenv("ARIA_MEDIA_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 ARIA_IMAGE_MODEL = os.getenv(
     "ARIA_IMAGE_MODEL",
-    "muse-image-1.0" if ARIA_PROVIDER == "avalai" else ("gpt-image-2" if ARIA_PROVIDER in {"doona", "1xai"} else ""),
+    "muse-image-1.0" if ARIA_PROVIDER == "avalai" else ("gemini-3.1-flash-lite-image" if ARIA_PROVIDER == "netarz" else ("gpt-image-2" if ARIA_PROVIDER in {"doona", "1xai"} else "")),
 ).strip()
 ARIA_IMAGE_QUALITY = os.getenv("ARIA_IMAGE_QUALITY", "low").strip().lower()
 if ARIA_IMAGE_QUALITY not in {"low", "medium", "high"}:
     ARIA_IMAGE_QUALITY = "low"
-ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "veo-3.1-fast-generate-001").strip()
+ARIA_VIDEO_MODEL = os.getenv("ARIA_VIDEO_MODEL", "veo-3.1-fast" if ARIA_PROVIDER == "netarz" else "veo-3.1-fast-generate-001").strip()
 OWNER_NAME = os.getenv("ARIA_OWNER_NAME", "Milad")
 DB_PATH = Path(os.getenv("ARIA_DB", "aria_cloud.db"))
 
@@ -431,8 +435,10 @@ def list_models(x_aria_token: str = Header(default="")):
     models = ARIA_ALLOWED_MODELS if hosted_ai_configured() else [MODEL]
     # 1xAi publishes its live merged catalogue at the compatible /v1/models route.
     # Fetch it server-side so retired/new model IDs do not break the Android picker.
-    if hosted_ai_configured() and ARIA_PROVIDER == "1xai":
+    if hosted_ai_configured() and ARIA_PROVIDER in {"1xai", "netarz"}:
         models_url = ARIA_API_BASE_URL.replace("/chat/completions", "/models")
+        if ARIA_PROVIDER == "netarz":
+            models_url += "?type=chat"
         try:
             catalogue = requests.get(
                 models_url,
@@ -482,8 +488,10 @@ def status():
     # is actually reachable. A non-empty environment variable alone is not health.
     provider_ok = False
     if hosted_ai_configured():
-        if ARIA_PROVIDER == "1xai":
+        if ARIA_PROVIDER in {"1xai", "netarz"}:
             models_url = ARIA_API_BASE_URL.replace("/chat/completions", "/models")
+            if ARIA_PROVIDER == "netarz":
+                models_url += "?type=chat"
             try:
                 provider_response = requests.get(
                     models_url,
@@ -984,7 +992,7 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
             raise ValueError("empty_image_response")
         item = data[0]
         image_data = item.get("b64_json")
-        mime_type = item.get("mime_type", "image/png")
+        mime_type = item.get("mime_type") or item.get("media_type") or ("image/jpeg" if item.get("output_format") in {"jpeg", "jpg"} else "image/png")
         if not image_data and item.get("url"):
             image_response = requests.get(item["url"], timeout=90)
             image_response.raise_for_status()
