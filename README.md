@@ -102,7 +102,7 @@ See [docs/paperclip-integration-fa.md](docs/paperclip-integration-fa.md) for the
 
 ## Iran-compatible cloud deployment
 
-The current default cloud-provider integration is 1xAi, an OpenAI-compatible Iranian API gateway. It supports one server-side key for a curated choice of models from GPT, Claude, Gemini, DeepSeek, Grok, Kimi, GLM, Qwen, MiniMax and Hunyuan. See [docs/1xai-integration-fa.md](docs/1xai-integration-fa.md) for account setup, key handling, the Weblines deployment configuration, model allowlist, image generation, separate video-provider requirements and paid-launch gates. Keep all API keys in hosting secrets, never in the APK or repository. The app includes a model picker; a real API key and successful server deployment are still required.
+The current default integration is NetArz / Gisoo using the domestic OpenAI-compatible endpoint `https://ir.gisoo.pro/api/v1`. One server-side key supports chat, a live model catalogue (including Claude via OpenRouter), image generation and asynchronous Sora/Veo video jobs. See [docs/netarz-integration-fa.md](docs/netarz-integration-fa.md) for account setup, live model selection, image/video configuration, Weblines deployment and monetization gates. Keep all API keys in hosting secrets, never in the APK or repository. The Android app obtains a per-install guest token; it does not need a six-digit pairing code. Real service access still requires a funded provider account, a configured HTTPS ARIA backend and successful device testing.
 
 ## Latest milestone
 
