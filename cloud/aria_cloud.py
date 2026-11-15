@@ -981,7 +981,8 @@ def generate_image(payload: ImageRequest, x_aria_token: str = Header(default="")
                 "model": ARIA_IMAGE_MODEL,
                 "prompt": payload.prompt.strip(),
                 "size": "1024x1024",
-                "quality": ARIA_IMAGE_QUALITY,
+                # NetArz Gemini image models expect 1K/2K/4K; the Lite model is 1K-only.
+                **({"quality": "1K"} if ARIA_PROVIDER == "netarz" and ARIA_IMAGE_MODEL.startswith("gemini-") else {"quality": ARIA_IMAGE_QUALITY}),
                 "n": 1,
             },
             timeout=180,
