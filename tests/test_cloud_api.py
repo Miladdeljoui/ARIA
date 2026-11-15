@@ -198,3 +198,45 @@ def test_neta_rz_live_catalogue_and_selected_model_chat(client, monkeypatch):
     assert chat_response.json()["answer"] == "پاسخ آزمایشی"
     assert selected["model"] == "openrouter/anthropic/claude-sonnet-4.5"
 
+def test_neta_rz_status_checks_authenticated_account_and_balance(client, monkeypatch):
+    monkeypatch.setattr(api, "ARIA_PROVIDER", "netarz")
+    monkeypatch.setattr(api, "ARIA_API_BASE_URL", "https://ir.gisoo.pro/api/v1/chat/completions")
+    monkeypatch.setattr(api, "ARIA_API_KEY", "test-provider-key")
+    monkeypatch.setattr(api, "hosted_ai_configured", lambda: True)
+
+    class FakeResponse:
+        ok = False
+
+        def __init__(self, payload=None):
+            self.payload = payload or {}
+
+        def raise_for_status(self):
+            if self.payload.get("raise"):
+                raise api.requests.HTTPError("invalid API key")
+
+        def json(self):
+            return self.payload
+
+    requested_urls = []
+
+    def fake_get(url, **kwargs):
+        requested_urls.append(url)
+        if url.endswith("/api/tags"):
+            return FakeResponse()
+        if url.endswith("/api/v1/me"):
+            return FakeResponse({"status": "active", "balance": {"usd": "0.50"}})
+        if url.endswith("/api/v1/models?type=chat"):
+            return FakeResponse({"data": [{"id": "deepseek-flash"}]})
+        raise AssertionError(f"Unexpected health URL: {url}")
+
+    monkeypatch.setattr(api.requests, "get", fake_get)
+    response = client.get("/status")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider_connected"] is True
+    assert body["chat_ready"] is True
+    assert requested_urls[-2:] == [
+        "https://ir.gisoo.pro/api/v1/me",
+        "https://ir.gisoo.pro/api/v1/models?type=chat",
+    ]
+
