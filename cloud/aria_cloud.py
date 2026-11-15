@@ -17,9 +17,9 @@ from pydantic import BaseModel, Field
 APP_HOST = os.getenv("ARIA_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("ARIA_PORT", "8000"))
 OLLAMA_URL = os.getenv("ARIA_OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
-# Default to 1xAi: an Iran-compatible OpenAI-style model gateway.
+# Default to NetArz/Gisoo domestic gateway for Iranian deployments.
 # Provider credentials stay on the server and are never returned to Android.
-ARIA_PROVIDER = os.getenv("ARIA_PROVIDER", "1xai").strip().lower()
+ARIA_PROVIDER = os.getenv("ARIA_PROVIDER", "netarz").strip().lower()
 DEFAULT_CHAT_URLS = {
     "1xai": "https://1xai.ir/v1/chat/completions",
     "avalai": "https://api.avalai.ir/v1/chat/completions",
