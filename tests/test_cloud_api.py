@@ -136,3 +136,65 @@ def test_latest_update_handles_missing_release(client, monkeypatch):
     response = client.get("/updates/latest")
     assert response.status_code == 200
     assert response.json()["available"] is False
+
+def test_neta_rz_live_catalogue_and_selected_model_chat(client, monkeypatch):
+    monkeypatch.setattr(api, "ARIA_PROVIDER", "netarz")
+    monkeypatch.setattr(api, "ARIA_API_BASE_URL", "https://ir.gisoo.pro/api/v1/chat/completions")
+    monkeypatch.setattr(api, "ARIA_API_KEY", "test-provider-key")
+    monkeypatch.setattr(api, "hosted_ai_configured", lambda: True)
+    monkeypatch.setattr(api, "ARIA_MODELS_UNRESTRICTED", True)
+    monkeypatch.setattr(api, "LIVE_MODEL_CATALOGUE", [])
+
+    class FakeModelsResponse:
+        ok = True
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "data": [
+                    {"id": "deepseek-flash", "type": "chat"},
+                    {"id": "openrouter/anthropic/claude-sonnet-4.5", "type": "chat"},
+                ]
+            }
+
+    requested_urls = []
+
+    def fake_get(url, **kwargs):
+        requested_urls.append(url)
+        return FakeModelsResponse()
+
+    monkeypatch.setattr(api.requests, "get", fake_get)
+
+    token = guest(client, "neta-rz-live-catalogue-install-001")
+    models_response = client.get(
+        "/models",
+        headers={"X-ARIA-Token": token},
+    )
+    assert models_response.status_code == 200
+    assert models_response.json()["models"] == [
+        "deepseek-flash",
+        "openrouter/anthropic/claude-sonnet-4.5",
+    ]
+    assert requested_urls[0].endswith("/models?type=chat")
+
+    selected = {}
+
+    def fake_chat(messages, model_override=None):
+        selected["model"] = model_override
+        return "پاسخ آزمایشی"
+
+    monkeypatch.setattr(api, "ask_hosted_api", fake_chat)
+    chat_response = client.post(
+        "/chat",
+        headers={"X-ARIA-Token": token},
+        json={
+            "prompt": "سلام",
+            "model": "openrouter/anthropic/claude-sonnet-4.5",
+        },
+    )
+    assert chat_response.status_code == 200
+    assert chat_response.json()["answer"] == "پاسخ آزمایشی"
+    assert selected["model"] == "openrouter/anthropic/claude-sonnet-4.5"
+
