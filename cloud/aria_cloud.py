@@ -48,6 +48,8 @@ if not ARIA_VIDEO_API_KEY and ARIA_PROVIDER != "1xai":
     ARIA_VIDEO_API_KEY = ARIA_API_KEY
 VIDEO_TIMEOUT_SECONDS = max(60, min(330, int(os.getenv("ARIA_VIDEO_TIMEOUT_SECONDS", "300"))))
 VIDEO_POLL_SECONDS = max(3, min(15, int(os.getenv("ARIA_VIDEO_POLL_SECONDS", "5"))))
+# Cap the maximum answer reservation at the provider to protect the prepaid wallet.
+MAX_OUTPUT_TOKENS = max(128, min(4096, int(os.getenv("ARIA_MAX_OUTPUT_TOKENS", "1200"))))
 OWNER_EMAIL = os.getenv("ARIA_OWNER_EMAIL", "miladdeljoui22@gmail.com").strip().lower()
 TRIAL_DAYS = max(0, min(365, int(os.getenv("ARIA_TRIAL_DAYS", "30"))))
 MONTHLY_PRICE_TOMAN = max(0, int(os.getenv("ARIA_MONTHLY_PRICE_TOMAN", "99000")))
@@ -338,6 +340,7 @@ def hosted_chat_request(messages: list[dict], model_override: str | None = None)
                 json={
                     "model": model_override or MODEL,
                     "messages": messages,
+                    "max_tokens": MAX_OUTPUT_TOKENS,
                     "stream": False,
                 },
                 timeout=(12, 90),
@@ -488,10 +491,27 @@ def status():
     # is actually reachable. A non-empty environment variable alone is not health.
     provider_ok = False
     if hosted_ai_configured():
-        if ARIA_PROVIDER in {"1xai", "netarz"}:
+        if ARIA_PROVIDER == "netarz":
+            # /models is public, so also authenticate against /me before declaring chat ready.
+            me_url = ARIA_API_BASE_URL.replace("/chat/completions", "/me")
+            models_url = ARIA_API_BASE_URL.replace("/chat/completions", "/models") + "?type=chat"
+            try:
+                me_response = requests.get(
+                    me_url,
+                    headers={"Authorization": f"Bearer {ARIA_API_KEY}"},
+                    timeout=(3, 5),
+                )
+                me_response.raise_for_status()
+                account = me_response.json()
+                if account.get("status") == "active":
+                    provider_response = requests.get(models_url, timeout=(3, 5))
+                    provider_response.raise_for_status()
+                    provider_data = provider_response.json().get("data") or []
+                    provider_ok = isinstance(provider_data, list) and bool(provider_data)
+            except (requests.RequestException, ValueError, AttributeError):
+                provider_ok = False
+        elif ARIA_PROVIDER == "1xai":
             models_url = ARIA_API_BASE_URL.replace("/chat/completions", "/models")
-            if ARIA_PROVIDER == "netarz":
-                models_url += "?type=chat"
             try:
                 provider_response = requests.get(
                     models_url,
