@@ -466,11 +466,12 @@ def list_models(x_aria_token: str = Header(default="")):
                     models = ARIA_ALLOWED_MODELS
         except (requests.RequestException, ValueError, AttributeError):
             logger.warning("Unable to refresh 1xAi model catalogue; serving cached allowlist")
-    if MODEL not in models:
+    if MODEL not in models and not hosted_ai_configured():
         models.insert(0, MODEL)
+    default_model = MODEL if MODEL in models else (models[0] if models else MODEL)
     return {
         "models": models,
-        "default_model": MODEL,
+        "default_model": default_model,
         "provider": ARIA_PROVIDER if hosted_ai_configured() else "ollama",
     }
 
@@ -508,7 +509,10 @@ def status():
                     provider_response = requests.get(models_url, timeout=(3, 5))
                     provider_response.raise_for_status()
                     provider_data = provider_response.json().get("data") or []
-                    provider_ok = isinstance(provider_data, list) and bool(provider_data)
+                    live_ids = [str(item.get("id", "")).strip() for item in provider_data if isinstance(item, dict) and str(item.get("id", "")).strip()]
+                    if live_ids:
+                        LIVE_MODEL_CATALOGUE[:] = live_ids
+                    provider_ok = bool(live_ids)
             except (requests.RequestException, ValueError, AttributeError):
                 provider_ok = False
         elif ARIA_PROVIDER == "1xai":
@@ -886,12 +890,20 @@ def chat(
 
     requested_model = (request.model or "").strip()
     if hosted_ai_configured():
-        allowed_models = set(ARIA_ALLOWED_MODELS)
-        if ARIA_PROVIDER == "1xai" and ARIA_MODELS_UNRESTRICTED:
-            allowed_models.update(LIVE_MODEL_CATALOGUE)
+        if ARIA_PROVIDER in {"1xai", "netarz"} and ARIA_MODELS_UNRESTRICTED:
+            allowed_models = set(LIVE_MODEL_CATALOGUE)
+        else:
+            allowed_models = set(ARIA_ALLOWED_MODELS)
         if requested_model and requested_model not in allowed_models:
             raise HTTPException(status_code=400, detail="model_not_allowed")
-        selected_model = requested_model or MODEL
+        if requested_model:
+            selected_model = requested_model
+        elif MODEL in allowed_models:
+            selected_model = MODEL
+        elif LIVE_MODEL_CATALOGUE:
+            selected_model = LIVE_MODEL_CATALOGUE[0]
+        else:
+            raise HTTPException(status_code=503, detail="no_active_cloud_chat_model")
     else:
         # A local Ollama fallback must ignore cloud-only model IDs.
         selected_model = MODEL
