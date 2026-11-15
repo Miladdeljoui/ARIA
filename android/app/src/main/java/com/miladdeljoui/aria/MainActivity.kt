@@ -182,6 +182,7 @@ private fun AriaApp(
     var activeModel by remember { mutableStateOf("در حال بررسی") }
     var selectedModel by remember { mutableStateOf(prefs.getString("selected_model", "") ?: "") }
     var availableModels by remember { mutableStateOf(listOf<String>()) }
+    var modelQuery by remember { mutableStateOf("") }
     var showModelPicker by remember { mutableStateOf(false) }
     var imageEnabled by remember { mutableStateOf(false) }
     var videoEnabled by remember { mutableStateOf(false) }
@@ -799,11 +800,22 @@ private fun AriaApp(
                     modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 420.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("مدل‌ها از درگاه 1xAi دریافت می‌شوند. هزینهٔ هر مدل از اعتبار کیف پول سرور کم می‌شود.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    Text("فهرست زندهٔ مدل‌های فعال سرور نمایش داده می‌شود. نام مدل را جست‌وجو کن؛ هزینه از اعتبار API مالک کسر می‌شود.", color = AriaMuted, style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = modelQuery,
+                        onValueChange = { modelQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("جست‌وجوی مدل (مثلاً Claude، GPT، Gemini)") },
+                        singleLine = true
+                    )
                     if (availableModels.isEmpty()) {
                         Text("در حال دریافت فهرست مدل‌ها…", color = AriaMuted)
                     }
-                    availableModels.forEach { model ->
+                    val matchingModels = availableModels.filter { it.contains(modelQuery.trim(), ignoreCase = true) }
+                    if (matchingModels.isNotEmpty()) {
+                        Text("${matchingModels.size} مدل پیدا شد", color = AriaMuted, style = MaterialTheme.typography.labelSmall)
+                    }
+                    matchingModels.take(60).forEach { model ->
                         OutlinedButton(
                             onClick = {
                                 selectedModel = model
