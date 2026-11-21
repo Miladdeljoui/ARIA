@@ -272,7 +272,7 @@ def register_billing_handlers(application):
     # These must be registered BEFORE the generic callback and private text handlers.
     application.add_handler(CallbackQueryHandler(
         billing_callback,
-        pattern=r"^(plans|clip_buy_weekly|clip_buy_monthly|clip_account|clip_pay_ok:\\d+|clip_pay_no:\\d+)$",
+        pattern=r"^(plans|clip_buy_weekly|clip_buy_monthly|clip_account|clip_pay_ok:\d+|clip_pay_no:\d+)$",
     ))
     application.add_handler(CommandHandler("payments", payments_command))
     application.add_handler(MessageHandler(
