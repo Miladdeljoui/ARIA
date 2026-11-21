@@ -1,0 +1,27 @@
+name: Telegram billing tests
+
+on:
+  push:
+    branches: [telegram-bot-billing]
+    paths:
+      - "telegram-bot/**"
+      - ".github/workflows/telegram-billing-tests.yml"
+  pull_request:
+    paths:
+      - "telegram-bot/**"
+      - ".github/workflows/telegram-billing-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Telegram modules
+        working-directory: telegram-bot
+        run: python -m py_compile billing.py billing_handlers.py clip_service.py install_billing.py
+      - name: Run SQLite billing tests
+        working-directory: telegram-bot
+        run: python -m unittest discover -s tests -v
