@@ -262,7 +262,7 @@ def get_account(user_id):
     try:
         active = conn.execute(
             """SELECT * FROM clip_subscriptions
-               WHERE user_id=? AND status='active' AND starts_at<=? AND ends_at>?
+               WHERE user_id=? AND status IN ('active','queued') AND starts_at<=? AND ends_at>?
                ORDER BY ends_at DESC LIMIT 1""",
             (user_id, to_iso(now), to_iso(now)),
         ).fetchone()
