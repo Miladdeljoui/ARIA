@@ -65,6 +65,7 @@ async def billing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "plans":
+        context.user_data.pop("clip_waiting", None)
         await query.edit_message_text(
             "🎬 اشتراک کلیپ‌ساز ARIA\n\n"
             "📅 هفتگی: ۶۰۰٬۰۰۰ تومان، ۷ روز، ۲۸ کلیپ، روزانه حداکثر ۴ کلیپ\n"
