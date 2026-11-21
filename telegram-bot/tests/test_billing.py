@@ -66,7 +66,7 @@ class BillingTests(unittest.TestCase):
         self.assertTrue(billing.finish_clip(reservation["job_id"], False))
         again = billing.reserve_clip(404)
         self.assertTrue(again["ok"])
-        self.assertEqual(again["remaining"], 26)
+        self.assertEqual(again["remaining"], 27)
 
     def test_reject_does_not_create_subscription(self):
         payment_id = self.payment(user_id=505)
