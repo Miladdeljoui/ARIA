@@ -118,12 +118,13 @@ async def generate_clip_for_user(update, context, prompt):
         return
 
     job_id = reservation["job_id"]
-    status_message = await message.reply_text(
-        "🎬 درخواست ثبت شد. ساخت کلیپ ممکن است چند دقیقه زمان ببرد..."
-    )
+    status_message = None
     file_path = None
 
     try:
+        status_message = await message.reply_text(
+            "🎬 درخواست ثبت شد. ساخت کلیپ ممکن است چند دقیقه زمان ببرد..."
+        )
         async with CLIP_SEMAPHORE:
             result = await create_prediction(prompt)
             url = output_url(result)
@@ -156,10 +157,14 @@ async def generate_clip_for_user(update, context, prompt):
     except Exception as exc:
         logging.exception("Clip generation failed for user %s", user.id)
         billing.finish_clip(job_id, False)
-        await status_message.edit_text(
+        error_text = (
             "❌ ساخت یا ارسال کلیپ ناموفق بود. سهمیه این درخواست به حسابت برگشت.\n"
             f"جزئیات: {str(exc)[:250]}"
         )
+        if status_message:
+            await status_message.edit_text(error_text)
+        else:
+            await message.reply_text(error_text)
     finally:
         if file_path:
             try:
