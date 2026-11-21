@@ -37,6 +37,7 @@
 
 - billing.py: تراکنش‌های SQLite، پرداخت، صف اشتراک و سهمیه کلیپ.
 - billing_handlers.py: رابط تلگرام برای خرید، دریافت رسید و تصمیم مدیر.
+- clip_service.py: ساخت کلیپ Replicate با رزرو و بازگشت سهمیه.
 - install_billing.py: وصله‌زن تکرارپذیر برای افزودن import و ثبت handler به bot.py و کپی ماژول‌ها در Docker image.
 - tests/test_billing.py: آزمون سهمیه، پرداخت تکراری، صف اشتراک و بازگشت سهمیه.
 
@@ -48,6 +49,7 @@
 cd /opt/aria-public
 curl -fsSL https://raw.githubusercontent.com/Miladdeljoui/ARIA/telegram-bot-billing/telegram-bot/billing.py -o billing.py
 curl -fsSL https://raw.githubusercontent.com/Miladdeljoui/ARIA/telegram-bot-billing/telegram-bot/billing_handlers.py -o billing_handlers.py
+curl -fsSL https://raw.githubusercontent.com/Miladdeljoui/ARIA/telegram-bot-billing/telegram-bot/clip_service.py -o clip_service.py
 curl -fsSL https://raw.githubusercontent.com/Miladdeljoui/ARIA/telegram-bot-billing/telegram-bot/install_billing.py -o install_billing.py
 python3 install_billing.py
 ```
@@ -56,14 +58,9 @@ python3 install_billing.py
 
 پس از وصله‌زنی، ابتدا syntax و build را بررسی کنید. تا پیش از موفقیت تست‌ها، کانتینر فعلی را جایگزین نکنید.
 
-## اتصال به موتور ساخت کلیپ
+## ساخت کلیپ
 
-موتور کلیپ باید پیش از شروع درخواست reserve_clip(user_id) را صدا بزند. اگر رزرو موفق نبود، ساخت شروع نشود. پس از پایان:
-
-- موفق: finish_clip(job_id, True)
-- ناموفق یا لغوشده: finish_clip(job_id, False)
-
-در زمان پردازش کلیپ، job_id رزرو را نگه دارید. برای سرور کم‌منبع، هم‌زمان فقط یک کار ساخت کلیپ اجرا شود. بازیابی رزروهای نیمه‌کاره هنگام شروع برنامه اجرا می‌شود.
+دکمه «ساخت کلیپ» در منوی ربات، متن درخواست را می‌گیرد و از مدل Replicate برای text-to-video استفاده می‌کند. پیش از ارسال درخواست، سهمیه در SQLite رزرو می‌شود. در صورت شکست ساخت یا ارسال ویدئو، سهمیه به همان تاریخ تهران بازگردانده می‌شود. برای حفظ منابع VPS، هم‌زمان فقط یک ساخت کلیپ اجرا می‌شود. سقف دانلود ویدئو ۴۵ مگابایت است. در این نسخه ورودی متن پشتیبانی می‌شود؛ ورودی تصویر به مرحله بعد موکول شده است.
 
 ## آزمون‌ها
 
