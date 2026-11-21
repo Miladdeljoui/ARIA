@@ -147,9 +147,12 @@ async def generate_clip_for_user(update, context, prompt):
                 )
 
         billing.finish_clip(job_id, True)
-        await status_message.edit_text(
-            f"✅ کلیپ ارسال شد. سهمیه باقی‌مانده این اشتراک: {reservation['remaining']}"
-        )
+        try:
+            await status_message.edit_text(
+                f"✅ کلیپ ارسال شد. سهمیه باقی‌مانده این اشتراک: {reservation['remaining']}"
+            )
+        except Exception:
+            logging.warning("Could not update clip status message after delivery")
     except Exception as exc:
         logging.exception("Clip generation failed for user %s", user.id)
         billing.finish_clip(job_id, False)
