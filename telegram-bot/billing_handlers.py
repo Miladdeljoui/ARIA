@@ -37,6 +37,7 @@ def plan_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📅 هفتگی | ۶۰۰ هزار تومان", callback_data="clip_buy_weekly")],
         [InlineKeyboardButton("🗓 ماهانه | ۲ میلیون و ۴۰۰ هزار تومان", callback_data="clip_buy_monthly")],
+        [InlineKeyboardButton("🎬 ساخت کلیپ", callback_data="clip_start")],
         [InlineKeyboardButton("👤 وضعیت اشتراک کلیپ‌ساز", callback_data="clip_account")],
         [InlineKeyboardButton("🏠 منوی اصلی", callback_data="home")],
     ])
@@ -47,6 +48,21 @@ async def billing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     uid = query.from_user.id
     data = query.data or ""
+
+    if data == "clip_start":
+        context.user_data.pop("billing_waiting_plan", None)
+        context.user_data["clip_waiting"] = True
+        await query.edit_message_text(
+            "🎬 ساخت کلیپ با هوش مصنوعی\n\n"
+            "توضیح کلیپ را به فارسی یا انگلیسی بنویس و ارسال کن.\n"
+            "حداکثر ۲۰۰۰ نویسه. برای ساخت کلیپ باید اشتراک فعال و سهمیه باقی‌مانده داشته باشی.\n"
+            "برای لغو از /cancel استفاده کن.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💎 خرید اشتراک", callback_data="plans")],
+                [InlineKeyboardButton("🏠 منوی اصلی", callback_data="home")],
+            ]),
+        )
+        return
 
     if data == "plans":
         await query.edit_message_text(
@@ -67,6 +83,7 @@ async def billing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        context.user_data.pop("clip_waiting", None)
         context.user_data["billing_waiting_plan"] = plan_key
         plan = billing.PLANS[plan_key]
         await query.edit_message_text(
@@ -231,6 +248,12 @@ async def receipt_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("clip_waiting", None)
+    context.user_data.pop("billing_waiting_plan", None)
+    await update.message.reply_text("درخواست فعلی لغو شد.")
+
+
 async def payments_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not ADMIN_ID or update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔ دسترسی غیرمجاز است.")
@@ -272,9 +295,10 @@ def register_billing_handlers(application):
     # These must be registered BEFORE the generic callback and private text handlers.
     application.add_handler(CallbackQueryHandler(
         billing_callback,
-        pattern=r"^(plans|clip_buy_weekly|clip_buy_monthly|clip_account|clip_pay_ok:\d+|clip_pay_no:\d+)$",
+        pattern=r"^(plans|clip_start|clip_buy_weekly|clip_buy_monthly|clip_account|clip_pay_ok:\d+|clip_pay_no:\d+)$",
     ))
     application.add_handler(CommandHandler("payments", payments_command))
+    application.add_handler(CommandHandler("cancel", cancel_command))
     application.add_handler(MessageHandler(
         filters.ChatType.PRIVATE & filters.PHOTO,
         receipt_photo,
